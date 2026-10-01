@@ -10,7 +10,6 @@ export type CalculationErrorCode =
   | 'PLAN_REQUIRED'
   | 'PLAN_NOT_POSITIVE'
   | 'FACT_REQUIRED'
-  | 'FACT_NEGATIVE'
   | 'BASE_AMOUNT_REQUIRED'
   | 'MANUAL_AMOUNT_REQUIRED'
   | 'INVALID_CONFIGURATION'
@@ -18,7 +17,10 @@ export type CalculationErrorCode =
   | 'UNKNOWN_AGGREGATION'
   | 'UNKNOWN_FILTER_OPERATOR'
   | 'INVALID_FILTER_VALUE'
-  | 'TEAM_MEMBERS_REQUIRED';
+  | 'TEAM_MEMBERS_REQUIRED'
+  | 'INVALID_DATE'
+  | 'INVALID_WITHDRAWAL_AMOUNT'
+  | 'INSUFFICIENT_DEPOSIT_BALANCE';
 
 export class CalculationError extends Error {
   constructor(

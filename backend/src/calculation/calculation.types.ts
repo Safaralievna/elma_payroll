@@ -30,7 +30,7 @@ export type RuleConfiguration = Record<string, unknown>;
 /** Bitta KPI qoidasini hisoblash uchun kirish ma'lumotlari. */
 export interface KpiRuleCalculationInput {
   calculationType: string;
-  /** kpi_plans.plan_value — faqat STEP/LINEAR uchun majburiy. */
+  /** kpi_plans.plan_value — STEP/LINEAR va min_achievement'li FIXED uchun majburiy. */
   plan?: DecimalInput | null;
   /** kpi_facts.fact_value (yoki shu qoida filtri bo'yicha hisoblangan fakt). */
   fact?: DecimalInput | null;
@@ -42,12 +42,22 @@ export interface KpiRuleCalculationInput {
   manualAmount?: DecimalInput | null;
 }
 
-/** Hisoblangan qoida natijasi. `amount` — yaxlitlanmagan aniq summa. */
+/**
+ * Jim o'tkazilmasligi kerak, lekin hisobni to'xtatmaydigan holatlar — review ekranida ko'rsatiladi.
+ *   NEGATIVE_FACT — fakt manfiy (qaytarishlar sotuvdan ko'p), qoida to'lovi 0 ga tenglashtirildi.
+ */
+export type KpiRuleWarning = 'NEGATIVE_FACT';
+
+/** Hisoblangan qoida natijasi. */
 export interface KpiRuleCalculationResult {
   calculationType: CalculationType;
   /** fact / plan × 100. Plan ishlatilmaydigan turlarda null. */
   achievementPercent: Decimal | null;
   /** Bazadan olinadigan to'lov foizi (STEP/LINEAR). Boshqalarda null. */
   payoutPercent: Decimal | null;
+  /** Yaxlitlanmagan aniq summa (Excel bilan tiyingacha solishtirish uchun). */
   amount: Decimal;
+  /** Butun so'mgacha yaxlitlangan summa — kpi_result_rules.amount. */
+  roundedAmount: Decimal;
+  warnings: KpiRuleWarning[];
 }

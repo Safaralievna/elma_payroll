@@ -12,6 +12,8 @@
     "resolveJsonModule": true,
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": ".",
+    "types": ["node", "jest"],
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,

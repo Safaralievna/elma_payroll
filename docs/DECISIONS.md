@@ -38,12 +38,14 @@ Manba: TZ, Excel, taqdimot, tasdiqlangan ERD/flowchart, `test_cases.json`, team 
 - Har bir qoidaning o'z fakti va summasi bor → `kpi_result_rules (kpi_result_id, kpi_rule_id, fact_value, amount)`. Har qoidani alohida KPI qilinmaydi.
 - `kpi_facts` — KPI darajasida bitta yozuv, unique `(period_id, employee_id, kpi_id)`.
 - Filtr qiymatlari (`kpi_rule_filters.values`) — ID'lar (kodlar emas). (texnik qaror)
+- Bitta KPI ichida ikki qoidaning `priority` qiymati bir xil bo'lsa (yoki qoida takrorlansa) — **validatsiya xatosi** (`INVALID_CONFIGURATION`): qaysi qoida birinchi ekani noaniq bo'lib qoladi. (team lead tasdiqladi, 2026-10-01)
 
 ### 2.3 Fakt va aggregation
 
 - Fakt faqat ACTIVE import versiyasidagi `sales_lines` dan hisoblanadi.
 - SUM / COUNT / COUNT_DISTINCT.
 - **AKB** = mijozning shu davr va KPI filtri bo'yicha **sof xaridi (summa bo'yicha) > 0** bo'lgan mijozlar soni. (texnik qaror: "sof xarid" summa bo'yicha)
+- **Manfiy fakt xato emas** (qaytarishlar sotuvdan ko'p bo'lishi mumkin). Har bir qoidaning to'lovi 0 dan kam bo'lmaydi: STEP, LINEAR, RESULT_PERCENTAGE, PER_UNIT uchun `max(0, natija)`. Qoida natijasiga `NEGATIVE_FACT` ogohlantirishi qo'shiladi va review ekranida ko'rinadi. (team lead tasdiqladi, 2026-10-01)
 
 ### 2.4 Jamoa (TEAM scope)
 
@@ -69,6 +71,7 @@ yangi qarz      = net < 0 ? −net : 0  → keyingi davrga
 Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depozit 644 000, net 4 796 000.
 
 - `debt_carryover` (texnik qaror: depozitdan keyin, avans kabi ayiriladi) va `deposit_return` — `payroll_items` da alohida qatorlar (`DEBT_CARRYOVER`, `DEPOSIT_RETURN`).
+- Hisoblash yadrosida `debt_carryover` va `deposit_return` berilmasa — 0 deb olinadi (qarz yoki qaytarish yo'q). (team lead tasdiqladi, 2026-10-01)
 
 ### 3.1 Qarz
 

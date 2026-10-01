@@ -20,9 +20,8 @@ export const HUNDRED = new Decimal(100);
 /**
  * Yakuniy pul summasi necha kasr xonagacha yaxlitlanadi.
  *
- * test_cases.json: "half-up, butun so'mgacha" → 0.
- * DB ustunlari decimal(18,2) bo'lib qoladi — kerak bo'lsa bu yerni 2 ga
- * o'zgartirish kifoya (OPEN BUSINESS QUESTIONS, 8-band).
+ * DECISIONS 1: har bir hisob qatori butun so'mgacha (half-up) → 0.
+ * DB ustunlari decimal(18,2) bo'lib qoladi.
  */
 export const MONEY_DECIMAL_PLACES = 0;
 

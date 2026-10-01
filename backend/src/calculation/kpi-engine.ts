@@ -1,11 +1,11 @@
 import { CalculationError } from './calculation.errors';
-import type { KpiRuleCalculationInput, KpiRuleCalculationResult } from './calculation.types';
+import type { KpiRuleCalculationInput, KpiRuleCalculationResult, KpiRuleWarning } from './calculation.types';
 import { getCalculator } from './calculators/calculator.registry';
 import { Decimal, HUNDRED, roundMoney, sumDecimals, toDecimalOrNull } from './decimal';
 
 /**
  * Achievement = fact / plan × 100.
- * Faqat plan ishlatiladigan turlar (STEP, LINEAR) uchun chaqiriladi.
+ * Faqat plan ishlatiladigan qoidalar (STEP, LINEAR, min_achievement'li FIXED) uchun chaqiriladi.
  * Plan yo'q yoki ≤ 0 bo'lsa — validatsiya xatosi (0 ga bo'linmaydi, jim o'tkazilmaydi).
  */
 export function calculateAchievementPercent(plan: Decimal | null, fact: Decimal): Decimal {
@@ -25,8 +25,9 @@ export function calculateAchievementPercent(plan: Decimal | null, fact: Decimal)
  *
  * Tartib (flowchart K1–K10):
  *   1. calculation type bo'yicha calculator tanlanadi;
- *   2. plan kerak bo'lsa: plan > 0 va baza tekshiriladi, achievement hisoblanadi;
- *   3. calculator summani hisoblaydi (yaxlitlanmagan).
+ *   2. plan kerak bo'lsa: plan > 0 tekshiriladi, achievement hisoblanadi;
+ *   3. baza kerak bo'lsa (STEP, LINEAR) — mavjudligi tekshiriladi;
+ *   4. calculator summani hisoblaydi; `roundedAmount` — butun so'mgacha (DECISIONS 1).
  */
 export function calculateKpiRule(input: KpiRuleCalculationInput): KpiRuleCalculationResult {
   const calculator = getCalculator(input.calculationType);
@@ -36,20 +37,21 @@ export function calculateKpiRule(input: KpiRuleCalculationInput): KpiRuleCalcula
   const baseAmount = toDecimalOrNull(input.baseAmount);
   const manualAmount = toDecimalOrNull(input.manualAmount);
 
-  const needsFact = calculator.type !== 'FIXED' && calculator.type !== 'MANUAL';
+  const configuration = input.configuration ?? {};
+  const planRequired = calculator.requiresPlan(configuration);
+  const needsFact = planRequired || (calculator.type !== 'FIXED' && calculator.type !== 'MANUAL');
   if (needsFact && fact === null) {
     throw new CalculationError('FACT_REQUIRED', 'Fakt qiymati yo\'q');
   }
-  if (fact !== null && fact.isNegative()) {
-    throw new CalculationError('FACT_NEGATIVE', "Fakt manfiy bo'lmasligi kerak", { fact: fact.toString() });
-  }
+  // Manfiy fakt xato emas (DECISIONS 2.3): to'lov calculator ichida 0 dan kam bo'lmaydi.
+  const warnings: KpiRuleWarning[] = fact !== null && fact.isNegative() ? ['NEGATIVE_FACT'] : [];
 
   let achievementPercent: Decimal | null = null;
-  if (calculator.requiresPlan) {
+  if (planRequired) {
     achievementPercent = calculateAchievementPercent(plan, fact as Decimal);
-    if (baseAmount === null) {
-      throw new CalculationError('BASE_AMOUNT_REQUIRED', 'Baza summa (base_amount) kiritilmagan');
-    }
+  }
+  if (calculator.requiresBaseAmount && baseAmount === null) {
+    throw new CalculationError('BASE_AMOUNT_REQUIRED', 'Baza summa (base_amount) kiritilmagan');
   }
 
   const output = calculator.calculate({
@@ -57,7 +59,7 @@ export function calculateKpiRule(input: KpiRuleCalculationInput): KpiRuleCalcula
     fact,
     baseAmount,
     achievementPercent,
-    configuration: input.configuration ?? {},
+    configuration,
     steps: input.steps ?? [],
     manualAmount,
   });
@@ -67,23 +69,25 @@ export function calculateKpiRule(input: KpiRuleCalculationInput): KpiRuleCalcula
     achievementPercent,
     payoutPercent: output.payoutPercent,
     amount: output.amount,
+    roundedAmount: roundMoney(output.amount),
+    warnings,
   };
 }
 
 export interface KpiCalculationResult {
+  /** Har bir qoida — kpi_result_rules qatori (amount = roundedAmount). */
   rules: KpiRuleCalculationResult[];
-  /** Qoidalar yig'indisi, yaxlitlanmagan. */
-  amountExact: Decimal;
-  /** kpi_results.kpi_amount ga yoziladigan yakuniy summa. */
+  /** kpi_results.kpi_amount — yaxlitlangan qoida qatorlari yig'indisi. */
   amount: Decimal;
 }
 
 /**
  * Bitta KPI = bir yoki bir nechta qoida. Qoidalar natijalari QO'SHILADI
  * (test_cases.json, 4-bo'lim: Ekspeditor 5% + 10% + 2%).
+ * Har qoida alohida yaxlitlanadi, KPI = yaxlitlangan qatorlar yig'indisi —
+ * hisob varag'idagi qatorlar yig'indisi doim jamiga teng (DECISIONS 1).
  */
 export function calculateKpi(rules: readonly KpiRuleCalculationInput[]): KpiCalculationResult {
   const results = rules.map(calculateKpiRule);
-  const amountExact = sumDecimals(results.map((r) => r.amount));
-  return { rules: results, amountExact, amount: roundMoney(amountExact) };
+  return { rules: results, amount: sumDecimals(results.map((r) => r.roundedAmount)) };
 }

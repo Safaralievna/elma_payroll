@@ -12,12 +12,13 @@ import { optionalConfigDecimal, requireNonNegative } from './config-readers';
  * To'lov foizi = bajarilish foizi (chegara va shift orasida); summa = baza × foiz / 100.
  * Masalan, operator: baza 200, bajarilish 98% → 196.
  *
- * DIQQAT: Operator uchun qaysi tur (STEP yoki LINEAR) default ekani ochiq savol —
- * bu calculator faqat mexanizm, qaysi KPI qaysi turda ekanini konfiguratsiya belgilaydi.
+ * Operator uchun standart tur — STEP (DECISIONS 2.1); qaysi KPI qaysi turda
+ * ekanini konstruktor (konfiguratsiya) belgilaydi, kod emas.
  */
 export const linearCalculator: KpiCalculator = {
   type: 'LINEAR',
-  requiresPlan: true,
+  requiresPlan: () => true,
+  requiresBaseAmount: true,
 
   calculate(input: NormalizedRuleInput): CalculatorOutput {
     const achievement = input.achievementPercent as Decimal;
@@ -27,7 +28,8 @@ export const linearCalculator: KpiCalculator = {
     if (minPercent) requireNonNegative(minPercent, 'min_percent');
     if (maxPercent) requireNonNegative(maxPercent, 'max_percent');
 
-    let payoutPercent: Decimal = achievement;
+    // Manfiy fakt → manfiy bajarilish; to'lov foizi 0 dan kam bo'lmaydi (DECISIONS 2.3).
+    let payoutPercent: Decimal = Decimal.max(achievement, ZERO);
     if (minPercent !== null && achievement.lt(minPercent)) {
       payoutPercent = ZERO;
     }

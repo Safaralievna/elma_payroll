@@ -7,7 +7,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | # | Bosqich | Holat |
 |---|---------|-------|
 | 1 | Hisoblash yadrosi (STEP, LINEAR, %, dona uchun, depozit, net) + `test_cases.json` | ✅ |
-| 1.1 | Yadroni yangi qarorlarga moslash (`docs/DECISIONS.md` 1–3) | ⏳ |
+| 1.1 | Yadroni yangi qarorlarga moslash (`docs/DECISIONS.md` 1–3) | ✅ |
 | 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ⏳ |
 | 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ⏳ |
 | 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ⏳ |
@@ -22,7 +22,10 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 
 ---
 
-## 1.1 — Yadroni yangi qarorlarga moslash
+## 1.1 — Yadroni yangi qarorlarga moslash ✅
+
+Natija: 79 test o'tdi, typecheck xatosiz. Yangi testlar — `src/calculation/__tests__/decisions-v2.spec.ts`.
+Yangi funksiyalar: `calculateKpiRuleFacts`, `separatePriorPeriodReturns`, `calculateDepositBalance`, `validateDepositWithdrawal`; aggregation `COUNT_DISTINCT_POSITIVE`.
 
 1. **Yaxlitlash:** har bir qoida natijasi butun so'mgacha yaxlitlanadi; KPI = yaxlitlangan qoidalar yig'indisi. `excel-reference.spec.ts`: KPI jami 2 325 297, ish haqi 4 565 297.
 2. **Priority:** bitta KPI ichida savdo qatori faqat `priority` bo'yicha birinchi mos kelgan qoidaga tushadi. Yangi funksiya: KPI qoidalari ro'yxati + qatorlar → har qoidaning fakti.

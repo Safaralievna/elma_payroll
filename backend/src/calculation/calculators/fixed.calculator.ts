@@ -1,19 +1,28 @@
+import { ZERO } from '../decimal';
 import type { CalculatorOutput, KpiCalculator, NormalizedRuleInput } from './calculator.interface';
-import { requireConfigDecimal, requireNonNegative } from './config-readers';
+import { optionalConfigDecimal, requireConfigDecimal, requireNonNegative } from './config-readers';
 
 /**
- * Belgilangan bonus: configuration dagi summa.
- * configuration: { "amount": 500000 }.
+ * Belgilangan bonus (DECISIONS 2.1):
+ *   configuration: { "min_achievement": 100, "amount": 500000 }
  *
- * TZ: "shart bajarilganda bir xil summa". Shartning aniq ko'rinishi hali
- * belgilanmagan — shuning uchun hozircha shart tekshirilmaydi (OPEN BUSINESS QUESTIONS).
+ *   min_achievement bor → plan kerak; bajarilish ≥ min_achievement bo'lsa `amount`, aks holda 0.
+ *   min_achievement yo'q → shartsiz `amount` (plan kerak emas).
  */
 export const fixedCalculator: KpiCalculator = {
   type: 'FIXED',
-  requiresPlan: false,
+  requiresPlan: (configuration) => optionalConfigDecimal(configuration, 'min_achievement') !== null,
+  requiresBaseAmount: false,
 
   calculate(input: NormalizedRuleInput): CalculatorOutput {
     const amount = requireNonNegative(requireConfigDecimal(input.configuration, 'amount'), 'amount');
-    return { payoutPercent: null, amount };
+    const minAchievement = optionalConfigDecimal(input.configuration, 'min_achievement');
+    if (minAchievement === null) {
+      return { payoutPercent: null, amount };
+    }
+    requireNonNegative(minAchievement, 'min_achievement');
+    // Engine requiresPlan bo'yicha achievementPercent ni hisoblab bergan.
+    const reached = input.achievementPercent!.gte(minAchievement);
+    return { payoutPercent: null, amount: reached ? amount : ZERO };
   },
 };

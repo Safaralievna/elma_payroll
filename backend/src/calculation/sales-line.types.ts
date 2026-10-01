@@ -13,8 +13,14 @@ export interface SalesLineForCalculation {
   clientId?: string | null;
   clientCategoryId?: string | null;
   priceTypeId?: string | null;
+  /** Qaytarish qatorlarida manfiy bo'ladi. */
   quantity?: string | number | null;
+  /** Qaytarish qatorlarida manfiy bo'ladi. */
   amount?: string | number | null;
+  /** sales_lines.sale_date ("YYYY-MM-DD") — TEAM scope'da jamoani aniqlash uchun. */
+  saleDate?: string | null;
+  /** sales_lines.original_sale_date — faqat qaytarish qatorlarida. */
+  originalSaleDate?: string | null;
 }
 
 /**

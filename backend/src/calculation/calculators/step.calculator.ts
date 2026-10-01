@@ -49,10 +49,12 @@ function normalizeSteps(steps: readonly StepTierInput[]): NormalizedStep[] {
  * Bu Excel formulasining umumiy ko'rinishi:
  *   =F*(MIN(MAX(0;(E*100-70)*2%);20%) + MIN(MAX(0;(E*100-80)*3%);30%) + ...)
  * Farqi — chegaralar, koeffitsiyentlar va limitlar kodda emas, kpi_rule_steps jadvalida.
+ * Har bir hissa ≥ 0, shuning uchun manfiy fakt ham 0 beradi (DECISIONS 2.3).
  */
 export const stepCalculator: KpiCalculator = {
   type: 'STEP',
-  requiresPlan: true,
+  requiresPlan: () => true,
+  requiresBaseAmount: true,
 
   calculate(input: NormalizedRuleInput): CalculatorOutput {
     const achievement = input.achievementPercent as Decimal;

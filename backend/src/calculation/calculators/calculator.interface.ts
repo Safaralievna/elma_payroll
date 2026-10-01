@@ -3,7 +3,7 @@ import type { CalculationType, RuleConfiguration, StepTierInput } from '../calcu
 
 /**
  * Engine tomonidan tekshirilgan va Decimal'ga o'girilgan kirish.
- * Calculator'ga yetib kelganda `requiresPlan` bo'lsa plan > 0 ekanligi,
+ * Calculator'ga yetib kelganda `requiresPlan` true bo'lsa plan > 0 ekanligi,
  * achievementPercent hisoblangani kafolatlanadi.
  */
 export interface NormalizedRuleInput {
@@ -28,7 +28,9 @@ export interface CalculatorOutput {
  */
 export interface KpiCalculator {
   readonly type: CalculationType;
-  /** true → plan majburiy, plan > 0, achievement = fact / plan. */
-  readonly requiresPlan: boolean;
+  /** true → plan majburiy, plan > 0, achievement = fact / plan. Konfiguratsiyaga bog'liq bo'lishi mumkin (FIXED). */
+  requiresPlan(configuration: RuleConfiguration): boolean;
+  /** true → kpi_plans.base_amount majburiy (STEP, LINEAR). */
+  readonly requiresBaseAmount: boolean;
   calculate(input: NormalizedRuleInput): CalculatorOutput;
 }

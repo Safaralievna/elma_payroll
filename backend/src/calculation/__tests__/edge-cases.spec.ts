@@ -68,7 +68,7 @@ describe('KPI qoidasi validatsiyasi', () => {
     ).toBe(250_000);
   });
   it('requiresPlan faqat STEP va LINEAR uchun true', () => {
-    expect(['STEP', 'LINEAR', 'RESULT_PERCENTAGE', 'PER_UNIT', 'FIXED', 'MANUAL'].map(requiresPlan)).toEqual([
+    expect(['STEP', 'LINEAR', 'RESULT_PERCENTAGE', 'PER_UNIT', 'FIXED', 'MANUAL'].map((t) => requiresPlan(t))).toEqual([
       true,
       true,
       false,

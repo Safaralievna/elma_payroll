@@ -54,27 +54,23 @@ describe('Excel: Savdo vakili varag\'i', () => {
     });
   });
 
-  it('KPI jami (aniq) = 2 325 296.26, yakuniy ish haqi = 4 565 296', () => {
+  it('har qator butun so\'mgacha yaxlitlanadi: KPI jami = 2 325 297, ish haqi = 4 565 297', () => {
+    // DECISIONS 1: har bir hisob qatori alohida yaxlitlanadi, jami = yaxlitlangan qatorlar yig'indisi.
+    // Excel 2 325 296 ko'rsatadi — 1 so'm farq normal.
     const { stepAmounts, organizations } = calculateRows();
-    const kpiExact = sumDecimals([...stepAmounts, organizations]);
-    expect(kpiExact.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toString()).toBe('2325296.26');
+    const kpiTotal = sumDecimals([...stepAmounts, organizations].map(roundMoney));
+    expect(kpiTotal.toNumber()).toBe(2_325_297);
 
     const payroll = calculatePayroll({
       fixedSalary: 2_000_000,
-      kpiTotal: roundMoney(kpiExact),
+      kpiTotal,
       bonusTotal: 500_000,
       penaltyTotal: 260_000,
       advanceTotal: 0,
       recalculationAmount: 0,
       depositPercent: null, // savdo vakilida depozit yo'q
     });
-    expect(payroll.netAmount.toNumber()).toBe(4_565_296);
-  });
-
-  it('OCHIQ SAVOL: har qatorni alohida yaxlitlasak jami 1 so\'mga farq qiladi', () => {
-    const { stepAmounts, organizations } = calculateRows();
-    const perRowRounded = sumDecimals([...stepAmounts, organizations].map(roundMoney));
-    // Excel: 2 325 296. Qator bo'yicha yaxlitlash: 2 325 297.
-    expect(perRowRounded.toNumber()).toBe(2_325_297);
+    expect(payroll.netAmount.toNumber()).toBe(4_565_297);
+    expect(payroll.payableAmount.toNumber()).toBe(4_565_297);
   });
 });

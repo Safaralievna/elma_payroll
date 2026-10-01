@@ -1,5 +1,5 @@
 import { CalculationError } from '../calculation.errors';
-import type { CalculationType } from '../calculation.types';
+import type { CalculationType, RuleConfiguration } from '../calculation.types';
 import type { KpiCalculator } from './calculator.interface';
 import { fixedCalculator } from './fixed.calculator';
 import { linearCalculator } from './linear.calculator';
@@ -37,7 +37,10 @@ export function getCalculator(type: string): KpiCalculator {
   return REGISTRY[type];
 }
 
-/** Plan kerakmi? Plan kiritish formasi va import validatsiyasi ham shundan foydalanadi. */
-export function requiresPlan(type: string): boolean {
-  return getCalculator(type).requiresPlan;
+/**
+ * Plan kerakmi? Plan kiritish formasi va import validatsiyasi ham shundan foydalanadi.
+ * FIXED uchun javob konfiguratsiyaga bog'liq (`min_achievement` bo'lsa — kerak).
+ */
+export function requiresPlan(type: string, configuration?: RuleConfiguration | null): boolean {
+  return getCalculator(type).requiresPlan(configuration ?? {});
 }

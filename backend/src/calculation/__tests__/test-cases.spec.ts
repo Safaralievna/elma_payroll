@@ -18,6 +18,7 @@ import {
   type RuleFilter,
   type SalesLineForCalculation,
   type StepTierInput,
+  type TeamLink,
 } from '..';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,17 +143,26 @@ describe('6. TEAM scope', () => {
   for (const t of cases['6_team_scope'].testlar) {
     it(`${t.operator} jamoasi fakti = ${t.kutilgan_fact}`, () => {
       const members = t.jamoa as { employee_id: string; manager_id: string; amount: number }[];
+      const saleDate = '2026-03-15';
       const lines: SalesLineForCalculation[] = [
-        ...members.map((m) => ({ employeeId: m.employee_id, amount: m.amount })),
+        ...members.map((m) => ({ employeeId: m.employee_id, amount: m.amount, saleDate })),
         // Operatorning o'z savdosi TEAM faktiga kirmasligi kerak:
-        { employeeId: t.operator, amount: 5_000_000 },
+        { employeeId: t.operator, amount: 5_000_000, saleDate },
       ];
-      const teamMemberIds = members.filter((m) => m.manager_id === t.operator).map((m) => m.employee_id);
+      // DECISIONS 2.4: manager_id o'rniga team_links. Fixture'dagi manager_id → havola.
+      const teamLinks: TeamLink[] = members.map((m) => ({
+        leaderId: m.manager_id,
+        memberId: m.employee_id,
+        linkType: 'OPERATOR',
+        startDate: '2026-01-01',
+        endDate: null,
+      }));
 
       const fact = calculateFact(lines, {
         scope: 'TEAM',
         employeeId: t.operator,
-        teamMemberIds,
+        teamLinks,
+        teamLinkType: 'OPERATOR',
         filters: [],
         aggregation: 'SUM',
         sourceField: 'amount',

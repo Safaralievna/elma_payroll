@@ -7,7 +7,8 @@ import type { CalculatorOutput, KpiCalculator, NormalizedRuleInput } from './cal
  */
 export const manualCalculator: KpiCalculator = {
   type: 'MANUAL',
-  requiresPlan: false,
+  requiresPlan: () => false,
+  requiresBaseAmount: false,
 
   calculate(input: NormalizedRuleInput): CalculatorOutput {
     if (input.manualAmount === null) {
