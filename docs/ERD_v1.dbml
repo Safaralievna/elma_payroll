@@ -1,0 +1,862 @@
+// ======================================================
+// 1. ORGANIZATION
+// ======================================================
+
+Table departments {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+  is_active boolean [not null, default: true]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table positions {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+
+  // NULL = position has no deposit rule
+  deposit_percent decimal(10,2)
+
+  is_active boolean [not null, default: true]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table employees {
+  id bigint [pk, increment]
+  employee_id varchar(50) [not null, unique]
+
+  first_name varchar(100)
+  last_name varchar(100)
+  middle_name varchar(100)
+
+  hire_date date
+  termination_date date
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table employee_assignments {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  department_id bigint [not null]
+  position_id bigint [not null]
+
+  // Historical manager/team relationship
+  manager_id bigint
+
+  start_date date [not null]
+  end_date date
+
+  created_at timestamp
+
+  indexes {
+    (employee_id, start_date) [unique]
+    (manager_id)
+  }
+}
+
+Table employee_salary_history {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+
+  salary_amount decimal(18,2) [not null]
+
+  start_date date [not null]
+  end_date date
+
+  created_at timestamp
+
+  indexes {
+    (employee_id, start_date) [unique]
+  }
+}
+
+
+// ======================================================
+// 2. USERS & ROLES
+// ======================================================
+
+Table roles {
+  id bigint [pk, increment]
+
+  name varchar(50) [not null, unique]
+  description varchar(255)
+}
+
+Table users {
+  id bigint [pk, increment]
+
+  employee_id bigint [unique]
+
+  username varchar(100) [not null, unique]
+  password_hash varchar(255) [not null]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table user_roles {
+  user_id bigint [not null]
+  role_id bigint [not null]
+
+  indexes {
+    (user_id, role_id) [pk]
+  }
+}
+
+
+// ======================================================
+// 3. KPI UNITS & DEFINITIONS
+// ======================================================
+
+Table kpi_units {
+  id bigint [pk, increment]
+
+  name varchar(100) [not null]
+  code varchar(30) [not null, unique]
+  description varchar(255)
+
+  // Examples:
+  // UZS, DONA, AKB, XONA, SOAT, KUN, TASK
+  // All monetary values are stored in UZS.
+
+  is_active boolean [not null, default: true]
+}
+
+Table kpi_definitions {
+  id bigint [pk, increment]
+
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+
+  description text
+
+  unit_id bigint [not null]
+
+  // STEP
+  // LINEAR
+  // RESULT_PERCENTAGE
+  // PER_UNIT
+  // FIXED
+  // MANUAL
+  calculation_type varchar(50) [not null]
+
+  // SUM
+  // COUNT
+  // COUNT_DISTINCT
+  aggregation varchar(30)
+
+  // amount
+  // quantity
+  // client_id
+  // etc.
+  source_field varchar(100)
+
+  // OWN / TEAM
+  scope varchar(20) [not null, default: 'OWN']
+
+  // EXCEL / ERP / MANUAL
+  fact_source varchar(50) [not null]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+
+// ======================================================
+// 4. KPI RULES
+// ======================================================
+
+Table kpi_rules {
+  id bigint [pk, increment]
+
+  kpi_id bigint [not null]
+
+  name varchar(200) [not null]
+
+  priority int [not null, default: 1]
+
+  configuration jsonb
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (kpi_id, priority) [unique]
+  }
+}
+
+Table kpi_rule_steps {
+  id bigint [pk, increment]
+
+  kpi_rule_id bigint [not null]
+
+  min_percent decimal(10,2) [not null]
+  max_percent decimal(10,2)
+
+  coefficient decimal(10,4) [not null]
+  max_reward_percent decimal(10,2)
+
+  created_at timestamp
+
+  indexes {
+    (kpi_rule_id, min_percent) [unique]
+  }
+}
+
+// STEP calculation is CUMULATIVE.
+// All passed steps are added together.
+
+Table kpi_rule_filters {
+  id bigint [pk, increment]
+
+  kpi_rule_id bigint [not null]
+
+  // product_id
+  // product_group_id
+  // client_id
+  // client_category_id
+  // price_type_id
+  field_name varchar(100) [not null]
+
+  // =, !=, IN, NOT_IN, >, <, etc.
+  operator varchar(30) [not null]
+
+  values jsonb [not null]
+
+  created_at timestamp
+
+  indexes {
+    (kpi_rule_id)
+  }
+}
+
+
+// ======================================================
+// 5. KPI ASSIGNMENT
+// ======================================================
+
+Table position_kpis {
+  id bigint [pk, increment]
+
+  position_id bigint [not null]
+  kpi_id bigint [not null]
+
+  start_date date [not null]
+  end_date date
+
+  is_active boolean [not null, default: true]
+
+  indexes {
+    (position_id, kpi_id, start_date) [unique]
+  }
+}
+
+Table employee_kpi_overrides {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // ADD / REMOVE
+  action varchar(20) [not null]
+
+  start_date date [not null]
+  end_date date
+
+  is_active boolean [not null, default: true]
+
+  indexes {
+    (employee_id, kpi_id, start_date) [unique]
+  }
+}
+
+
+// ======================================================
+// 6. PAYROLL PERIOD
+// ======================================================
+
+Table payroll_periods {
+  id bigint [pk, increment]
+
+  year int [not null]
+  month int [not null]
+
+  // OPEN
+  // CALCULATING
+  // CALCULATED
+  // REVIEW
+  // CLOSED
+  status varchar(30) [not null, default: 'OPEN']
+
+  opened_at timestamp
+  closed_at timestamp
+
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (year, month) [unique]
+  }
+}
+
+
+// ======================================================
+// 7. MONTHLY KPI PLAN
+// ======================================================
+
+Table kpi_plans {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // Required for STEP / LINEAR.
+  // Not required for PER_UNIT and other types
+  // that do not use Plan.
+  plan_value decimal(18,4)
+
+  // KPI base amount/rate for this employee and period.
+  base_amount decimal(18,2)
+
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (period_id, employee_id, kpi_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 8. SALES REFERENCE DATA
+// ======================================================
+
+Table product_groups {
+  id bigint [pk, increment]
+
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table products {
+  id bigint [pk, increment]
+
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+
+  product_group_id bigint [not null]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table client_categories {
+  id bigint [pk, increment]
+
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table clients {
+  id bigint [pk, increment]
+
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+
+  client_category_id bigint
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table price_types {
+  id bigint [pk, increment]
+
+  name varchar(100) [not null]
+  code varchar(50) [not null, unique]
+
+  is_active boolean [not null, default: true]
+}
+
+
+// ======================================================
+// 9. EXCEL IMPORT
+// ======================================================
+
+Table import_batches {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+
+  file_name varchar(255) [not null]
+
+  // SALES / PLANS / EMPLOYEES
+  import_type varchar(30) [not null]
+
+  version_number int [not null]
+
+  // ACTIVE / ARCHIVED
+  status varchar(20) [not null]
+
+  imported_by bigint [not null]
+
+  imported_at timestamp
+
+  indexes {
+    (period_id, import_type, version_number) [unique]
+  }
+}
+
+Table import_rows {
+  id bigint [pk, increment]
+
+  batch_id bigint [not null]
+
+  row_number int [not null]
+
+  // Only employee_id is used for employee matching.
+  employee_id varchar(50)
+
+  raw_data jsonb
+
+  is_valid boolean [not null, default: true]
+
+  created_at timestamp
+
+  indexes {
+    (batch_id, row_number) [unique]
+  }
+}
+
+Table validation_errors {
+  id bigint [pk, increment]
+
+  import_row_id bigint [not null]
+
+  field_name varchar(100)
+  error_message text [not null]
+
+  created_at timestamp
+}
+
+
+// ======================================================
+// 10. NORMALIZED SALES DATA
+// ======================================================
+
+Table sales_lines {
+  id bigint [pk, increment]
+
+  // Direct reference to the exact Excel import version.
+  // This allows ACTIVE/ARCHIVED versions to coexist.
+  import_batch_id bigint [not null]
+
+  import_row_id bigint [not null]
+
+  employee_id bigint [not null]
+
+  product_id bigint [not null]
+  client_id bigint [not null]
+  price_type_id bigint [not null]
+
+  sale_date date [not null]
+
+  quantity decimal(18,4)
+  amount decimal(18,2)
+
+  raw_data jsonb
+
+  created_at timestamp
+
+  indexes {
+    (import_batch_id)
+    (import_batch_id, employee_id)
+    (product_id)
+    (client_id)
+    (price_type_id)
+  }
+}
+
+
+// ======================================================
+// 11. KPI FACT
+// ======================================================
+
+Table kpi_facts {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // NULL = manually calculated/entered Fact.
+  // Non-NULL = Fact generated from a specific import version.
+  import_batch_id bigint
+
+  fact_value decimal(18,4) [not null]
+
+  calculated_at timestamp
+  created_at timestamp
+}
+
+
+// ======================================================
+// 12. KPI RESULT
+// ======================================================
+
+Table kpi_results {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  plan_value decimal(18,4)
+  fact_value decimal(18,4)
+
+  // Snapshot of the base used during calculation.
+  base_amount decimal(18,2)
+
+  achievement_percent decimal(10,4)
+
+  kpi_amount decimal(18,2) [not null]
+
+  calculated_at timestamp
+
+  indexes {
+    (period_id, employee_id, kpi_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 13. PAYROLL
+// ======================================================
+
+Table payrolls {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+
+  fixed_salary decimal(18,2) [not null, default: 0]
+  kpi_total decimal(18,2) [not null, default: 0]
+
+  bonus_total decimal(18,2) [not null, default: 0]
+  penalty_total decimal(18,2) [not null, default: 0]
+
+  // Advance is already received by the employee.
+  // Therefore it is deducted from the final payable amount.
+  advance_total decimal(18,2) [not null, default: 0]
+
+  // Amount accumulated as deposit.
+  deposit_amount decimal(18,2) [not null, default: 0]
+
+  recalculation_amount decimal(18,2) [not null, default: 0]
+
+  // Gross calculated salary before payment deductions.
+  gross_amount decimal(18,2) [not null]
+
+  // Final amount payable to employee:
+  // gross_amount
+  // - penalty_total
+  // - deposit_amount
+  // - advance_total
+  // + recalculation_amount
+  net_amount decimal(18,2) [not null]
+
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (period_id, employee_id) [unique]
+  }
+}
+
+Table payroll_items {
+  id bigint [pk, increment]
+
+  payroll_id bigint [not null]
+
+  // FIXED_SALARY
+  // KPI
+  // BONUS
+  // PENALTY
+  // ADVANCE
+  // DEPOSIT
+  // DEPOSIT_RETURN
+  // RECALCULATION
+  item_type varchar(50) [not null]
+
+  description varchar(255)
+
+  amount decimal(18,2) [not null]
+
+  created_at timestamp
+}
+
+
+// ======================================================
+// 14. BONUS / PENALTY / ADVANCE
+// ======================================================
+
+Table bonuses {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  name varchar(150) [not null]
+  amount decimal(18,2) [not null]
+
+  description text
+
+  created_at timestamp
+}
+
+Table penalties {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  name varchar(150) [not null]
+  amount decimal(18,2) [not null]
+
+  description text
+
+  created_at timestamp
+}
+
+Table advances {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  // Already paid earlier.
+  // Deducted from final payable amount.
+  amount decimal(18,2) [not null]
+
+  description text
+
+  created_at timestamp
+}
+
+
+// ======================================================
+// 15. DEPOSIT
+// ======================================================
+
+Table deposits {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  // KPI + Fixed Salary + Bonus - Penalty
+  // Advance is NOT included.
+  base_amount decimal(18,2) [not null]
+
+  deposit_percent decimal(10,2) [not null]
+
+  deposit_amount decimal(18,2) [not null]
+
+  // ACCUMULATED / PAID
+  status varchar(30) [not null, default: 'ACCUMULATED']
+
+  paid_at timestamp
+
+  created_at timestamp
+
+  indexes {
+    (employee_id, period_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 16. RECALCULATION
+// ======================================================
+
+Table recalculations {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+
+  source_period_id bigint [not null]
+  target_period_id bigint [not null]
+
+  amount decimal(18,2) [not null]
+
+  reason text [not null]
+
+  created_at timestamp
+
+  created_by bigint [not null]
+}
+
+
+// ======================================================
+// 17. AUDIT
+// ======================================================
+
+Table audit_logs {
+  id bigint [pk, increment]
+
+  user_id bigint
+
+  action varchar(50) [not null]
+
+  entity_type varchar(100) [not null]
+  entity_id bigint
+
+  old_data jsonb
+  new_data jsonb
+
+  created_at timestamp [not null]
+}
+
+
+// ======================================================
+// RELATIONSHIPS
+// ======================================================
+
+// ORGANIZATION
+Ref: employee_assignments.employee_id > employees.id
+Ref: employee_assignments.department_id > departments.id
+Ref: employee_assignments.position_id > positions.id
+Ref: employee_assignments.manager_id > employees.id
+
+Ref: employee_salary_history.employee_id > employees.id
+
+
+// USERS
+Ref: users.employee_id - employees.id
+
+Ref: user_roles.user_id > users.id
+Ref: user_roles.role_id > roles.id
+
+
+// KPI
+Ref: kpi_definitions.unit_id > kpi_units.id
+
+Ref: kpi_rules.kpi_id > kpi_definitions.id
+Ref: kpi_rule_steps.kpi_rule_id > kpi_rules.id
+Ref: kpi_rule_filters.kpi_rule_id > kpi_rules.id
+
+
+// KPI ASSIGNMENT
+Ref: position_kpis.position_id > positions.id
+Ref: position_kpis.kpi_id > kpi_definitions.id
+
+Ref: employee_kpi_overrides.employee_id > employees.id
+Ref: employee_kpi_overrides.kpi_id > kpi_definitions.id
+
+
+// PAYROLL PERIOD
+Ref: kpi_plans.period_id > payroll_periods.id
+Ref: kpi_plans.employee_id > employees.id
+Ref: kpi_plans.kpi_id > kpi_definitions.id
+
+
+// REFERENCE DATA
+Ref: products.product_group_id > product_groups.id
+Ref: clients.client_category_id > client_categories.id
+
+
+// IMPORT
+Ref: import_batches.period_id > payroll_periods.id
+Ref: import_batches.imported_by > users.id
+
+Ref: import_rows.batch_id > import_batches.id
+Ref: validation_errors.import_row_id > import_rows.id
+
+
+// SALES
+Ref: sales_lines.import_batch_id > import_batches.id
+Ref: sales_lines.import_row_id > import_rows.id
+Ref: sales_lines.employee_id > employees.id
+Ref: sales_lines.product_id > products.id
+Ref: sales_lines.client_id > clients.id
+Ref: sales_lines.price_type_id > price_types.id
+
+
+// FACT
+Ref: kpi_facts.period_id > payroll_periods.id
+Ref: kpi_facts.employee_id > employees.id
+Ref: kpi_facts.kpi_id > kpi_definitions.id
+Ref: kpi_facts.import_batch_id > import_batches.id
+
+
+// RESULT
+Ref: kpi_results.period_id > payroll_periods.id
+Ref: kpi_results.employee_id > employees.id
+Ref: kpi_results.kpi_id > kpi_definitions.id
+
+
+// PAYROLL
+Ref: payrolls.period_id > payroll_periods.id
+Ref: payrolls.employee_id > employees.id
+Ref: payroll_items.payroll_id > payrolls.id
+
+
+// BONUS
+Ref: bonuses.employee_id > employees.id
+Ref: bonuses.period_id > payroll_periods.id
+
+
+// PENALTY
+Ref: penalties.employee_id > employees.id
+Ref: penalties.period_id > payroll_periods.id
+
+
+// ADVANCE
+Ref: advances.employee_id > employees.id
+Ref: advances.period_id > payroll_periods.id
+
+
+// DEPOSIT
+Ref: deposits.employee_id > employees.id
+Ref: deposits.period_id > payroll_periods.id
+
+
+// RECALCULATION
+Ref: recalculations.employee_id > employees.id
+Ref: recalculations.source_period_id > payroll_periods.id
+Ref: recalculations.target_period_id > payroll_periods.id
+Ref: recalculations.created_by > users.id
+
+
+// AUDIT
+Ref: audit_logs.user_id > users.id

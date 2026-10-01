@@ -12,6 +12,7 @@ Lavozimlar: Savdo vakili, Supervayzer, Operator, Yetkazib berish (Ekspeditor).
 
 Batafsil biznes qarorlari: **`docs/DECISIONS.md`** (majburiy o'qiladi, hisob-kitobga tegishli har qanday ishdan oldin).
 Ish rejasi va holati: **`docs/PLAN.md`**.
+Baza sxemasi: **`docs/ERD_v2.dbml`** — jadvallar, ustunlar va cheklovlar uchun yagona manba. Undan chetga chiqma, jadval yoki ustunni taxmin qilma.
 
 ## Stek
 

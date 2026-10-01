@@ -1,0 +1,1028 @@
+// ======================================================
+// ELMA Payroll — ERD v2
+// Asos: docs/ERD_v1.dbml (team lead tasdiqlagan)
+// + docs/DECISIONS.md (team lead va rahbariyat javoblari, 2026-10-01)
+//
+// v1 dan farqlar "[v2]" belgisi bilan ko'rsatilgan.
+// Bu fayl — Prisma sxemasi uchun YAGONA manba. Taxmin qilinmaydi.
+//
+// Umumiy qoidalar:
+// - Pul: decimal(18,2), UZS. Foiz: decimal(10,2) yoki (10,4).
+// - Hamma created_at: NOT NULL DEFAULT now(). updated_at: NOT NULL, Prisma @updatedAt.
+// - "// CHECK:" izohlari — migratsiyaga qo'lda SQL bilan yoziladi.
+// ======================================================
+
+
+// ======================================================
+// 1. ORGANIZATION
+// ======================================================
+
+Table departments {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table positions {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+
+  // NULL = lavozimda depozit yo'q. Hozircha faqat Ekspeditor: 10.
+  // CHECK: deposit_percent IS NULL OR deposit_percent BETWEEN 0 AND 100
+  deposit_percent decimal(10,2)
+
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table employees {
+  id bigint [pk, increment]
+
+  // Biznes kodi (Excel/ERP dagi). Prisma: employeeCode @map("employee_id")
+  employee_id varchar(50) [not null, unique]
+
+  first_name varchar(100)
+  last_name varchar(100)
+  middle_name varchar(100)
+
+  hire_date date
+  termination_date date
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table employee_assignments {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  department_id bigint [not null]
+  position_id bigint [not null]
+
+  // [v2] manager_id OLIB TASHLANDI → team_links
+
+  start_date date [not null]
+  end_date date
+  // CHECK: end_date IS NULL OR end_date >= start_date
+  // EXCLUDE USING gist (employee_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (employee_id, start_date) [unique]
+  }
+}
+
+Table employee_salary_history {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+
+  // Belgilangan (fiks) oylik. CHECK: salary_amount >= 0
+  salary_amount decimal(18,2) [not null]
+
+  start_date date [not null]
+  end_date date
+  // CHECK: end_date IS NULL OR end_date >= start_date
+  // EXCLUDE USING gist (employee_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (employee_id, start_date) [unique]
+  }
+}
+
+// [v2] YANGI — manager_id o'rniga. Bir xodim bir vaqtda ham supervayzerga,
+// ham operatorga bo'ysunishi mumkin.
+Table team_links {
+  id bigint [pk, increment]
+
+  leader_id bigint [not null]
+  member_id bigint [not null]
+
+  // SUPERVISOR / OPERATOR
+  // CHECK: link_type IN ('SUPERVISOR','OPERATOR')
+  link_type varchar(20) [not null]
+
+  start_date date [not null]
+  end_date date
+  // CHECK: end_date IS NULL OR end_date >= start_date
+  // CHECK: leader_id <> member_id
+  // EXCLUDE USING gist (member_id WITH =, link_type WITH =,
+  //                     daterange(start_date, end_date, '[]') WITH &&)
+  //   → bir xodimda bir vaqtda bitta SUPERVISOR va bitta OPERATOR
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (leader_id, link_type)
+    (member_id)
+  }
+}
+
+
+// ======================================================
+// 2. USERS & ROLES
+// ======================================================
+
+Table roles {
+  id bigint [pk, increment]
+
+  // MVP: ADMIN, CALCULATOR, APPROVER (seed orqali)
+  name varchar(50) [not null, unique]
+  description varchar(255)
+}
+
+Table users {
+  id bigint [pk, increment]
+
+  employee_id bigint [unique]
+
+  username varchar(100) [not null, unique]
+  // argon2 xeshi
+  password_hash varchar(255) [not null]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table user_roles {
+  user_id bigint [not null]
+  role_id bigint [not null]
+
+  indexes {
+    (user_id, role_id) [pk]
+  }
+}
+
+
+// ======================================================
+// 3. KPI UNITS & DEFINITIONS
+// ======================================================
+
+Table kpi_units {
+  id bigint [pk, increment]
+
+  name varchar(100) [not null]
+  code varchar(30) [not null, unique]
+  description varchar(255)
+
+  // Masalan: UZS, DONA, AKB, SOAT, KUN. Admin yangisini qo'sha oladi.
+
+  is_active boolean [not null, default: true]
+}
+
+Table kpi_definitions {
+  id bigint [pk, increment]
+
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+
+  description text
+
+  unit_id bigint [not null]
+
+  // CHECK: calculation_type IN ('STEP','LINEAR','RESULT_PERCENTAGE','PER_UNIT','FIXED','MANUAL')
+  calculation_type varchar(50) [not null]
+
+  // CHECK: aggregation IS NULL OR aggregation IN ('SUM','COUNT','COUNT_DISTINCT','COUNT_DISTINCT_POSITIVE')
+  // [v2] COUNT_DISTINCT_POSITIVE — AKB (sof xaridi > 0 mijozlar)
+  aggregation varchar(30)
+
+  // amount / quantity / client_id ... (yadrodagi SALES_LINE_FIELDS)
+  source_field varchar(100)
+
+  // CHECK: scope IN ('OWN','TEAM')
+  scope varchar(20) [not null, default: 'OWN']
+
+  // [v2] YANGI. scope = TEAM bo'lsa majburiy.
+  // CHECK: team_link_type IS NULL OR team_link_type IN ('SUPERVISOR','OPERATOR')
+  // CHECK: (scope = 'TEAM') = (team_link_type IS NOT NULL)
+  team_link_type varchar(20)
+
+  // CHECK: fact_source IN ('EXCEL','ERP','MANUAL')
+  fact_source varchar(50) [not null]
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+
+// ======================================================
+// 4. KPI RULES
+// ======================================================
+
+Table kpi_rules {
+  id bigint [pk, increment]
+
+  kpi_id bigint [not null]
+
+  name varchar(200) [not null]
+
+  // Kichik raqam = birinchi tekshiriladi. Bir KPI ichida savdo qatori
+  // faqat birinchi mos kelgan qoidaga tushadi (DECISIONS 2.2).
+  priority int [not null, default: 1]
+
+  // Hisoblash turi parametrlari: percent, rate_per_unit, amount,
+  // min_achievement, min_percent, max_percent ...
+  configuration jsonb
+
+  is_active boolean [not null, default: true]
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (kpi_id, priority) [unique]
+  }
+}
+
+Table kpi_rule_steps {
+  id bigint [pk, increment]
+
+  kpi_rule_id bigint [not null]
+
+  min_percent decimal(10,2) [not null]
+  max_percent decimal(10,2)
+
+  coefficient decimal(10,4) [not null]
+  max_reward_percent decimal(10,2)
+  // CHECK: coefficient >= 0
+  // CHECK: max_percent IS NULL OR max_percent > min_percent
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (kpi_rule_id, min_percent) [unique]
+  }
+}
+
+// STEP calculation is CUMULATIVE.
+
+Table kpi_rule_filters {
+  id bigint [pk, increment]
+
+  kpi_rule_id bigint [not null]
+
+  // product_id, product_group_id, client_id, client_category_id, price_type_id, ...
+  field_name varchar(100) [not null]
+
+  // CHECK: operator IN ('=','!=','IN','NOT_IN','>','>=','<','<=')
+  operator varchar(30) [not null]
+
+  // ID'lar (kodlar emas) — DECISIONS 2.2
+  values jsonb [not null]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (kpi_rule_id)
+  }
+}
+
+
+// ======================================================
+// 5. KPI ASSIGNMENT
+// ======================================================
+
+Table position_kpis {
+  id bigint [pk, increment]
+
+  position_id bigint [not null]
+  kpi_id bigint [not null]
+
+  start_date date [not null]
+  end_date date
+  // CHECK: end_date IS NULL OR end_date >= start_date
+  // EXCLUDE USING gist (position_id WITH =, kpi_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
+
+  is_active boolean [not null, default: true]
+
+  indexes {
+    (position_id, kpi_id, start_date) [unique]
+  }
+}
+
+Table employee_kpi_overrides {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // ADD / REMOVE — lavozim KPI'lariga qo'shimcha yoki olib tashlash
+  // CHECK: action IN ('ADD','REMOVE')
+  action varchar(20) [not null]
+
+  start_date date [not null]
+  end_date date
+  // CHECK: end_date IS NULL OR end_date >= start_date
+  // EXCLUDE USING gist (employee_id WITH =, kpi_id WITH =, daterange(start_date, end_date, '[]') WITH &&)
+
+  is_active boolean [not null, default: true]
+
+  indexes {
+    (employee_id, kpi_id, start_date) [unique]
+  }
+}
+
+
+// ======================================================
+// 6. PAYROLL PERIOD
+// ======================================================
+
+Table payroll_periods {
+  id bigint [pk, increment]
+
+  year int [not null]
+  // CHECK: month BETWEEN 1 AND 12
+  month int [not null]
+
+  // [v2] Faqat OPEN / REVIEW / CLOSED (DECISIONS 5)
+  // CHECK: status IN ('OPEN','REVIEW','CLOSED')
+  status varchar(30) [not null, default: 'OPEN']
+
+  // [v2] Ikki kishi qoidasi uchun: kim hisobladi/yubordi, kim yopdi.
+  // CHECK: closed_by IS NULL OR submitted_by IS NULL OR closed_by <> submitted_by
+  calculated_by bigint
+  calculated_at timestamp
+  submitted_by bigint
+  submitted_at timestamp
+  closed_by bigint
+
+  opened_at timestamp
+  closed_at timestamp
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (year, month) [unique]
+  }
+}
+
+
+// ======================================================
+// 7. MONTHLY KPI PLAN (davr kirishlari)
+// ======================================================
+
+Table kpi_plans {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // STEP / LINEAR va min_achievement'li FIXED uchun majburiy (servis tekshiradi).
+  // CHECK: plan_value IS NULL OR plan_value > 0
+  plan_value decimal(18,4)
+
+  // STEP / LINEAR uchun 100% to'lov summasi. CHECK: base_amount IS NULL OR base_amount >= 0
+  base_amount decimal(18,2)
+
+  // [v2] YANGI. MANUAL turidagi KPI uchun qo'lda kiritilgan summa.
+  // CHECK: manual_amount IS NULL OR manual_amount >= 0
+  manual_amount decimal(18,2)
+
+  // [v2] YANGI. Plan Excel'dan kelgan bo'lsa — qaysi versiyadan. Qo'lda → NULL.
+  import_batch_id bigint
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (period_id, employee_id, kpi_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 8. SALES REFERENCE DATA
+// ======================================================
+
+Table product_groups {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table products {
+  id bigint [pk, increment]
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+  product_group_id bigint [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table client_categories {
+  id bigint [pk, increment]
+  name varchar(150) [not null]
+  code varchar(50) [unique]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table clients {
+  id bigint [pk, increment]
+  name varchar(200) [not null]
+  code varchar(50) [not null, unique]
+  client_category_id bigint
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+}
+
+Table price_types {
+  id bigint [pk, increment]
+  name varchar(100) [not null]
+  code varchar(50) [not null, unique]
+  is_active boolean [not null, default: true]
+}
+
+
+// ======================================================
+// 9. EXCEL IMPORT
+// ======================================================
+
+Table import_batches {
+  id bigint [pk, increment]
+
+  // [v2] NULLABLE: SALES va PLANS uchun majburiy; EMPLOYEES, TEAM_LINKS,
+  // PRODUCTS, CLIENTS kabi ma'lumotnoma importlari davrga bog'lanmaydi.
+  // CHECK: import_type NOT IN ('SALES','PLANS') OR period_id IS NOT NULL
+  period_id bigint
+
+  file_name varchar(255) [not null]
+
+  // [v2] YANGI. SHA-256 (64 belgi). Bir xil fayl qayta yuklansa
+  // "Bu fayl allaqachon yuklangan".
+  file_hash varchar(64) [not null]
+
+  // CHECK: import_type IN ('SALES','PLANS','EMPLOYEES','TEAM_LINKS','PRODUCTS','CLIENTS')
+  import_type varchar(30) [not null]
+
+  version_number int [not null]
+
+  // [v2] ACTIVE / ARCHIVED / INVALID / COMPARISON
+  // INVALID — kamida bitta qator xato, hech qachon ACTIVE bo'lmaydi.
+  // COMPARISON — CLOSED davrga yuklangan, faqat solishtirish uchun.
+  // CHECK: status IN ('ACTIVE','ARCHIVED','INVALID','COMPARISON')
+  status varchar(20) [not null]
+
+  imported_by bigint [not null]
+
+  imported_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (period_id, import_type, version_number) [unique]
+    // [v2] Qo'lda SQL:
+    // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type) WHERE status = 'ACTIVE';
+    // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type, file_hash) NULLS NOT DISTINCT;
+  }
+}
+
+Table import_rows {
+  id bigint [pk, increment]
+
+  batch_id bigint [not null]
+
+  row_number int [not null]
+
+  // Faqat employee_id (biznes kodi) bo'yicha moslanadi.
+  employee_id varchar(50)
+
+  raw_data jsonb
+
+  is_valid boolean [not null, default: true]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (batch_id, row_number) [unique]
+  }
+}
+
+Table validation_errors {
+  id bigint [pk, increment]
+
+  import_row_id bigint [not null]
+
+  field_name varchar(100)
+  error_message text [not null]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (import_row_id)
+  }
+}
+
+
+// ======================================================
+// 10. NORMALIZED SALES DATA
+// ======================================================
+
+Table sales_lines {
+  id bigint [pk, increment]
+
+  import_batch_id bigint [not null]
+  import_row_id bigint [not null]
+
+  employee_id bigint [not null]
+
+  product_id bigint [not null]
+  client_id bigint [not null]
+  price_type_id bigint [not null]
+
+  sale_date date [not null]
+
+  // [v2] YANGI. Faqat qaytarish qatorlarida (shablondagi asl_sotuv_sanasi).
+  // O'tgan oyga tegishli bo'lsa — joriy faktga kirmaydi (DECISIONS 4.1).
+  original_sale_date date
+
+  // [v2] Manfiy bo'lishi MUMKIN (qaytarishlar). CHECK qo'yilmaydi.
+  quantity decimal(18,4)
+  amount decimal(18,2)
+
+  raw_data jsonb
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (import_batch_id)
+    (import_batch_id, employee_id)
+    (product_id)
+    (client_id)
+    (price_type_id)
+  }
+}
+
+
+// ======================================================
+// 11. KPI FACT
+// ======================================================
+
+Table kpi_facts {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  // NULL = qo'lda kiritilgan. Aks holda — qaysi ACTIVE versiyadan.
+  import_batch_id bigint
+
+  // Manfiy bo'lishi mumkin (qaytarishlar) — DECISIONS 2.3
+  fact_value decimal(18,4) [not null]
+
+  calculated_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    // [v2] Team lead talabi bilan qaytarildi
+    (period_id, employee_id, kpi_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 12. KPI RESULT
+// ======================================================
+
+Table kpi_results {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+  kpi_id bigint [not null]
+
+  plan_value decimal(18,4)
+  fact_value decimal(18,4)
+
+  // Hisob paytidagi baza (snapshot)
+  base_amount decimal(18,2)
+
+  achievement_percent decimal(10,4)
+
+  // = Σ kpi_result_rules.amount (yaxlitlangan qatorlar yig'indisi). CHECK: kpi_amount >= 0
+  kpi_amount decimal(18,2) [not null]
+
+  calculated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (period_id, employee_id, kpi_id) [unique]
+  }
+}
+
+// [v2] YANGI — har qoidaning o'z fakti va summasi (Ekspeditor: 3 qoida).
+Table kpi_result_rules {
+  id bigint [pk, increment]
+
+  kpi_result_id bigint [not null]
+  kpi_rule_id bigint [not null]
+
+  fact_value decimal(18,4)
+
+  // STEP/LINEAR uchun (ko'rsatish uchun)
+  achievement_percent decimal(10,4)
+  payout_percent decimal(10,4)
+
+  // Butun so'mgacha yaxlitlangan. CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+
+  // Masalan ["NEGATIVE_FACT"] — review ekranida ko'rsatiladi
+  warnings jsonb
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (kpi_result_id, kpi_rule_id) [unique]
+  }
+}
+
+
+// ======================================================
+// 13. PAYROLL
+// ======================================================
+
+Table payrolls {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+
+  // CHECK: quyidagi komponentlarning hammasi >= 0 (recalculation_amount, net_amount bundan mustasno)
+  fixed_salary decimal(18,2) [not null, default: 0]
+  kpi_total decimal(18,2) [not null, default: 0]
+  bonus_total decimal(18,2) [not null, default: 0]
+  penalty_total decimal(18,2) [not null, default: 0]
+  advance_total decimal(18,2) [not null, default: 0]
+  deposit_amount decimal(18,2) [not null, default: 0]
+
+  // Manfiy ham bo'lishi mumkin
+  recalculation_amount decimal(18,2) [not null, default: 0]
+
+  // [v2] YANGI
+  debt_carryover_amount decimal(18,2) [not null, default: 0]
+  deposit_return_amount decimal(18,2) [not null, default: 0]
+
+  // gross = fixed + kpi + bonus  (qayta hisob KIRMAYDI)
+  gross_amount decimal(18,2) [not null]
+
+  // net = gross − penalty − deposit − advance − debt_carryover
+  //       + recalculation + deposit_return   (manfiy bo'lishi mumkin)
+  net_amount decimal(18,2) [not null]
+
+  // [v2] YANGI. payable = max(net, 0). CHECK: payable_amount >= 0
+  payable_amount decimal(18,2) [not null]
+
+  // [v2] Masalan ["NEGATIVE_NET_AMOUNT"]
+  warnings jsonb
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (period_id, employee_id) [unique]
+  }
+}
+
+Table payroll_items {
+  id bigint [pk, increment]
+
+  payroll_id bigint [not null]
+
+  // CHECK: item_type IN ('FIXED_SALARY','KPI','BONUS','PENALTY','ADVANCE',
+  //                      'DEPOSIT','DEPOSIT_RETURN','RECALCULATION','DEBT_CARRYOVER')
+  // [v2] DEBT_CARRYOVER qo'shildi
+  item_type varchar(50) [not null]
+
+  description varchar(255)
+
+  amount decimal(18,2) [not null]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (payroll_id)
+  }
+}
+
+// [v2] YANGI — to'lov taqsimoti. CARD + CASH = payrolls.payable_amount (servis tekshiradi).
+Table payroll_payments {
+  id bigint [pk, increment]
+
+  payroll_id bigint [not null]
+
+  // CHECK: method IN ('CARD','CASH')
+  method varchar(20) [not null]
+
+  // CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (payroll_id, method) [unique]
+  }
+}
+
+
+// ======================================================
+// 14. BONUS / PENALTY / ADVANCE  (v1 dagi kabi — alohida jadvallar)
+// ======================================================
+
+Table bonuses {
+  id bigint [pk, increment]
+  employee_id bigint [not null]
+  period_id bigint [not null]
+  name varchar(150) [not null]
+  // CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+  description text
+  created_at timestamp [not null, default: `now()`]
+  indexes { (period_id, employee_id) }
+}
+
+Table penalties {
+  id bigint [pk, increment]
+  employee_id bigint [not null]
+  period_id bigint [not null]
+  name varchar(150) [not null]
+  // CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+  description text
+  created_at timestamp [not null, default: `now()`]
+  indexes { (period_id, employee_id) }
+}
+
+Table advances {
+  id bigint [pk, increment]
+  employee_id bigint [not null]
+  period_id bigint [not null]
+  // Oldin berilgan. Yakuniy to'lanadigan summadan ayiriladi. CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+  description text
+  created_at timestamp [not null, default: `now()`]
+  indexes { (period_id, employee_id) }
+}
+
+
+// ======================================================
+// 15. DEPOSIT
+// ======================================================
+
+// [v2] Faqat oylik yig'ilish yozuvlari. status va paid_at OLIB TASHLANDI.
+Table deposits {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  // gross − penalty (avans va qarz kirmaydi)
+  base_amount decimal(18,2) [not null]
+
+  // Hisob paytidagi positions.deposit_percent (snapshot)
+  // CHECK: deposit_percent BETWEEN 0 AND 100
+  deposit_percent decimal(10,2) [not null]
+
+  // CHECK: deposit_amount >= 0
+  deposit_amount decimal(18,2) [not null]
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (employee_id, period_id) [unique]
+  }
+}
+
+// [v2] YANGI. Balans = Σ deposits.deposit_amount − Σ deposit_withdrawals.amount
+// Balansdan ko'p yechib bo'lmaydi (servis, tranzaksiya ichida tekshiradi).
+Table deposit_withdrawals {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+  period_id bigint [not null]
+
+  // CHECK: amount > 0
+  amount decimal(18,2) [not null]
+
+  reason text [not null]
+
+  // PAYROLL → shu davr payroll'ida DEPOSIT_RETURN qatori
+  // SEPARATE → pul alohida beriladi, tizim faqat yozadi
+  // CHECK: payout_type IN ('PAYROLL','SEPARATE')
+  payout_type varchar(20) [not null]
+
+  created_by bigint [not null]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (employee_id)
+    (period_id)
+  }
+}
+
+
+// ======================================================
+// 16. DEBT  [v2] YANGI
+// ======================================================
+
+// Net manfiy bo'lsa: to'lanadigan = 0, qoldiq shu yerga → keyingi davrda DEBT_CARRYOVER.
+Table employee_debts {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+
+  source_period_id bigint [not null]
+  target_period_id bigint [not null]
+
+  // CHECK: amount > 0
+  amount decimal(18,2) [not null]
+
+  // PENDING — keyingi davrni kutmoqda; APPLIED — target davr payroll'iga DEBT_CARRYOVER bo'lib tushdi
+  // CHECK: status IN ('PENDING','APPLIED')
+  // CHECK: source_period_id <> target_period_id
+  status varchar(20) [not null, default: 'PENDING']
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (employee_id, source_period_id) [unique]
+    (target_period_id)
+  }
+}
+
+
+// ======================================================
+// 17. RECALCULATION
+// ======================================================
+
+Table recalculations {
+  id bigint [pk, increment]
+
+  employee_id bigint [not null]
+
+  source_period_id bigint [not null]
+  target_period_id bigint [not null]
+  // CHECK: source_period_id <> target_period_id
+
+  // Manfiy ham bo'lishi mumkin
+  amount decimal(18,2) [not null]
+
+  reason text [not null]
+
+  created_at timestamp [not null, default: `now()`]
+  created_by bigint [not null]
+}
+
+
+// ======================================================
+// 18. AUDIT
+// ======================================================
+
+// Faqat INSERT. UPDATE/DELETE trigger bilan taqiqlanadi.
+Table audit_logs {
+  id bigint [pk, increment]
+
+  user_id bigint
+
+  action varchar(50) [not null]
+
+  entity_type varchar(100) [not null]
+  entity_id bigint
+
+  old_data jsonb
+  new_data jsonb
+
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (entity_type, entity_id)
+    (created_at)
+  }
+}
+
+
+// ======================================================
+// RELATIONSHIPS
+// ======================================================
+
+// ORGANIZATION
+Ref: employee_assignments.employee_id > employees.id
+Ref: employee_assignments.department_id > departments.id
+Ref: employee_assignments.position_id > positions.id
+Ref: employee_salary_history.employee_id > employees.id
+Ref: team_links.leader_id > employees.id
+Ref: team_links.member_id > employees.id
+
+// USERS
+Ref: users.employee_id - employees.id
+Ref: user_roles.user_id > users.id
+Ref: user_roles.role_id > roles.id
+
+// KPI
+Ref: kpi_definitions.unit_id > kpi_units.id
+Ref: kpi_rules.kpi_id > kpi_definitions.id
+Ref: kpi_rule_steps.kpi_rule_id > kpi_rules.id
+Ref: kpi_rule_filters.kpi_rule_id > kpi_rules.id
+
+// KPI ASSIGNMENT
+Ref: position_kpis.position_id > positions.id
+Ref: position_kpis.kpi_id > kpi_definitions.id
+Ref: employee_kpi_overrides.employee_id > employees.id
+Ref: employee_kpi_overrides.kpi_id > kpi_definitions.id
+
+// PERIOD
+Ref: payroll_periods.calculated_by > users.id
+Ref: payroll_periods.submitted_by > users.id
+Ref: payroll_periods.closed_by > users.id
+
+// PLAN
+Ref: kpi_plans.period_id > payroll_periods.id
+Ref: kpi_plans.employee_id > employees.id
+Ref: kpi_plans.kpi_id > kpi_definitions.id
+Ref: kpi_plans.import_batch_id > import_batches.id
+
+// REFERENCE DATA
+Ref: products.product_group_id > product_groups.id
+Ref: clients.client_category_id > client_categories.id
+
+// IMPORT
+Ref: import_batches.period_id > payroll_periods.id
+Ref: import_batches.imported_by > users.id
+Ref: import_rows.batch_id > import_batches.id
+Ref: validation_errors.import_row_id > import_rows.id
+
+// SALES
+Ref: sales_lines.import_batch_id > import_batches.id
+Ref: sales_lines.import_row_id > import_rows.id
+Ref: sales_lines.employee_id > employees.id
+Ref: sales_lines.product_id > products.id
+Ref: sales_lines.client_id > clients.id
+Ref: sales_lines.price_type_id > price_types.id
+
+// FACT
+Ref: kpi_facts.period_id > payroll_periods.id
+Ref: kpi_facts.employee_id > employees.id
+Ref: kpi_facts.kpi_id > kpi_definitions.id
+Ref: kpi_facts.import_batch_id > import_batches.id
+
+// RESULT
+Ref: kpi_results.period_id > payroll_periods.id
+Ref: kpi_results.employee_id > employees.id
+Ref: kpi_results.kpi_id > kpi_definitions.id
+Ref: kpi_result_rules.kpi_result_id > kpi_results.id
+Ref: kpi_result_rules.kpi_rule_id > kpi_rules.id
+
+// PAYROLL
+Ref: payrolls.period_id > payroll_periods.id
+Ref: payrolls.employee_id > employees.id
+Ref: payroll_items.payroll_id > payrolls.id
+Ref: payroll_payments.payroll_id > payrolls.id
+
+// BONUS / PENALTY / ADVANCE
+Ref: bonuses.employee_id > employees.id
+Ref: bonuses.period_id > payroll_periods.id
+Ref: penalties.employee_id > employees.id
+Ref: penalties.period_id > payroll_periods.id
+Ref: advances.employee_id > employees.id
+Ref: advances.period_id > payroll_periods.id
+
+// DEPOSIT
+Ref: deposits.employee_id > employees.id
+Ref: deposits.period_id > payroll_periods.id
+Ref: deposit_withdrawals.employee_id > employees.id
+Ref: deposit_withdrawals.period_id > payroll_periods.id
+Ref: deposit_withdrawals.created_by > users.id
+
+// DEBT
+Ref: employee_debts.employee_id > employees.id
+Ref: employee_debts.source_period_id > payroll_periods.id
+Ref: employee_debts.target_period_id > payroll_periods.id
+
+// RECALCULATION
+Ref: recalculations.employee_id > employees.id
+Ref: recalculations.source_period_id > payroll_periods.id
+Ref: recalculations.target_period_id > payroll_periods.id
+Ref: recalculations.created_by > users.id
+
+// AUDIT
+Ref: audit_logs.user_id > users.id

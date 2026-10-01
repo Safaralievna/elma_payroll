@@ -121,6 +121,8 @@ Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depoz
 
 ## 6. ERD v2 — tasdiqlangan ERD'ga o'zgarishlar
 
+To'liq sxema: `docs/ERD_v2.dbml`.
+
 Qo'shiladi:
 - `kpi_result_rules (id, kpi_result_id, kpi_rule_id, fact_value, amount)`
 - `team_links (id, leader_id, member_id, link_type, start_date, end_date)`

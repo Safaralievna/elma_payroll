@@ -35,3 +35,23 @@ Yangi funksiyalar: `calculateKpiRuleFacts`, `separatePriorPeriodReturns`, `calcu
 6. **Payroll:** `debtCarryover`, `depositReturn` kirishlari; `payable = max(net, 0)`, `newDebt = net < 0 ? −net : 0`.
 7. **Depozit balansi:** `validateDepositWithdrawal(balance, amount)` — balansdan ko'p yechib bo'lmaydi.
 8. Har bir o'zgarish uchun testlar. Eski `test_cases.json` testlari o'tishda davom etishi shart.
+
+---
+
+## 2-bosqich — Baza: ERD v2 → Prisma
+
+Manba: `docs/ERD_v2.dbml` (41 jadval). Undan chetga chiqilmaydi.
+
+1. `docker-compose.yml` (loyiha ildizida): PostgreSQL 16, ma'lumot volume'da saqlanadi.
+2. `backend/prisma/schema.prisma`: ERD v2 dagi hamma jadval. Model nomlari PascalCase, ustunlar camelCase + `@map`, jadvallar `@@map("snake_case")`. `employees.employee_id` → `employeeCode`.
+3. Migratsiya 1 (`init`): Prisma generatsiya qiladi.
+4. Migratsiya 2 (`constraints`): ERD v2 dagi hamma `// CHECK:`, `EXCLUDE USING gist` (`CREATE EXTENSION btree_gist`), partial/`NULLS NOT DISTINCT` unique indekslar, `audit_logs` uchun UPDATE/DELETE'ni to'suvchi trigger — qo'lda SQL.
+5. `backend/src/prisma/`: PrismaService + PrismaModule (minimal).
+6. `backend/prisma/seed.ts` (idempotent — qayta ishga tushsa dublikat yaratmaydi):
+   - rollar ADMIN, CALCULATOR, APPROVER; admin foydalanuvchi (parol `.env` dagi `SEED_ADMIN_PASSWORD`, argon2);
+   - 4 lavozim: Savdo vakili, Supervayzer, Operator, Yetkazib berish (Ekspeditor, `deposit_percent = 10`);
+   - kpi_units: UZS, DONA, AKB; price_types: ULGURJI, CHAKANA;
+   - namuna KPI: "Umumiy savdo hajmi" (STEP, SUM amount, OWN) — Excel'dagi 4 pog'ona bilan, Savdo vakili lavozimiga biriktirilgan.
+7. `backend/.env.example`; `.env` gitignore'da.
+8. DB testlari (`npm run test:db`, alohida jest config): har bir muhim cheklov haqiqatan ishlashini tekshiradi (ikkinchi ACTIVE batch, ustma-ust tarix, audit_logs'ni o'chirish, manfiy jarima, noto'g'ri status ...). `npm test` avvalgidek DB'siz qoladi.
+9. `README.md` ni yangila (ishga tushirish: `docker compose up -d`, migratsiya, seed). `*.tsbuildinfo` ni `.gitignore` ga qo'sh va git'dan chiqar.
