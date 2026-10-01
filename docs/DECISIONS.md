@@ -72,6 +72,7 @@ Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depoz
 
 - `debt_carryover` (texnik qaror: depozitdan keyin, avans kabi ayiriladi) va `deposit_return` — `payroll_items` da alohida qatorlar (`DEBT_CARRYOVER`, `DEPOSIT_RETURN`).
 - Hisoblash yadrosida `debt_carryover` va `deposit_return` berilmasa — 0 deb olinadi (qarz yoki qaytarish yo'q). (team lead tasdiqladi, 2026-10-01)
+- **`payroll_items.amount` ishorasi:** ayiriladigan qatorlar (`PENALTY`, `ADVANCE`, `DEPOSIT`, `DEBT_CARRYOVER`) — manfiy; qo'shiladiganlari (`FIXED_SALARY`, `KPI`, `BONUS`, `DEPOSIT_RETURN`) — musbat; `RECALCULATION` — o'z ishorasi bilan. Natijada **Σ payroll_items.amount = payrolls.net_amount**. 8-bosqichda kod va DB CHECK bilan amalga oshiriladi. (team lead tasdiqladi, 2026-10-01)
 
 ### 3.1 Qarz
 

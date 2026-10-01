@@ -1,0 +1,883 @@
+// ======================================================
+// ELMA Payroll — Prisma sxemasi
+// Yagona manba: docs/ERD_v2.dbml (41 jadval). Undan chetga chiqilmaydi.
+//
+// Nomlash: model PascalCase, maydon camelCase + @map, jadval @@map("snake_case").
+// employees.employee_id (biznes kodi) → employeeCode (boshqa jadvallardagi
+// employee_id FK bilan chalkashmasligi uchun).
+//
+// Prisma yoza olmaydigan cheklovlar (CHECK, EXCLUDE, partial / NULLS NOT DISTINCT
+// unique, audit_logs trigger) — migrations/*_constraints/migration.sql da qo'lda SQL.
+// Status/tur ustunlari ERD'dagidek varchar + CHECK (Prisma enum emas).
+// ======================================================
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// 1. ORGANIZATION
+// ======================================================
+
+model Department {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  code      String?  @unique @db.VarChar(50)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  assignments EmployeeAssignment[]
+
+  @@map("departments")
+}
+
+model Position {
+  id             BigInt   @id @default(autoincrement())
+  name           String   @db.VarChar(150)
+  code           String?  @unique @db.VarChar(50)
+  /// NULL = lavozimda depozit yo'q.
+  depositPercent Decimal? @map("deposit_percent") @db.Decimal(10, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  assignments  EmployeeAssignment[]
+  positionKpis PositionKpi[]
+
+  @@map("positions")
+}
+
+model Employee {
+  id              BigInt    @id @default(autoincrement())
+  /// Biznes kodi (Excel/ERP dagi).
+  employeeCode    String    @unique @map("employee_id") @db.VarChar(50)
+  firstName       String?   @map("first_name") @db.VarChar(100)
+  lastName        String?   @map("last_name") @db.VarChar(100)
+  middleName      String?   @map("middle_name") @db.VarChar(100)
+  hireDate        DateTime? @map("hire_date") @db.Date
+  terminationDate DateTime? @map("termination_date") @db.Date
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user               User?
+  assignments        EmployeeAssignment[]
+  salaryHistory      EmployeeSalaryHistory[]
+  ledLinks           TeamLink[]              @relation("TeamLinkLeader")
+  memberLinks        TeamLink[]              @relation("TeamLinkMember")
+  kpiOverrides       EmployeeKpiOverride[]
+  kpiPlans           KpiPlan[]
+  salesLines         SalesLine[]
+  kpiFacts           KpiFact[]
+  kpiResults         KpiResult[]
+  payrolls           Payroll[]
+  bonuses            Bonus[]
+  penalties          Penalty[]
+  advances           Advance[]
+  deposits           Deposit[]
+  depositWithdrawals DepositWithdrawal[]
+  debts              EmployeeDebt[]
+  recalculations     Recalculation[]
+
+  @@map("employees")
+}
+
+model EmployeeAssignment {
+  id           BigInt    @id @default(autoincrement())
+  employeeId   BigInt    @map("employee_id")
+  departmentId BigInt    @map("department_id")
+  positionId   BigInt    @map("position_id")
+  startDate    DateTime  @map("start_date") @db.Date
+  endDate      DateTime? @map("end_date") @db.Date
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+  department Department @relation(fields: [departmentId], references: [id])
+  position   Position   @relation(fields: [positionId], references: [id])
+
+  @@unique([employeeId, startDate])
+  @@map("employee_assignments")
+}
+
+model EmployeeSalaryHistory {
+  id           BigInt    @id @default(autoincrement())
+  employeeId   BigInt    @map("employee_id")
+  salaryAmount Decimal   @map("salary_amount") @db.Decimal(18, 2)
+  startDate    DateTime  @map("start_date") @db.Date
+  endDate      DateTime? @map("end_date") @db.Date
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, startDate])
+  @@map("employee_salary_history")
+}
+
+/// manager_id o'rniga. Bir xodim bir vaqtda ham supervayzerga, ham operatorga bo'ysunishi mumkin.
+model TeamLink {
+  id        BigInt    @id @default(autoincrement())
+  leaderId  BigInt    @map("leader_id")
+  memberId  BigInt    @map("member_id")
+  /// SUPERVISOR / OPERATOR
+  linkType  String    @map("link_type") @db.VarChar(20)
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  leader Employee @relation("TeamLinkLeader", fields: [leaderId], references: [id])
+  member Employee @relation("TeamLinkMember", fields: [memberId], references: [id])
+
+  @@index([leaderId, linkType])
+  @@index([memberId])
+  @@map("team_links")
+}
+
+// ======================================================
+// 2. USERS & ROLES
+// ======================================================
+
+model Role {
+  id          BigInt  @id @default(autoincrement())
+  /// MVP: ADMIN, CALCULATOR, APPROVER
+  name        String  @unique @db.VarChar(50)
+  description String? @db.VarChar(255)
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  employeeId   BigInt?  @unique @map("employee_id")
+  username     String   @unique @db.VarChar(100)
+  /// argon2 xeshi
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  employee Employee?  @relation(fields: [employeeId], references: [id])
+  roles    UserRole[]
+
+  calculatedPeriods  PayrollPeriod[]     @relation("PeriodCalculatedBy")
+  submittedPeriods   PayrollPeriod[]     @relation("PeriodSubmittedBy")
+  closedPeriods      PayrollPeriod[]     @relation("PeriodClosedBy")
+  importBatches      ImportBatch[]
+  depositWithdrawals DepositWithdrawal[]
+  recalculations     Recalculation[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model UserRole {
+  userId BigInt @map("user_id")
+  roleId BigInt @map("role_id")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ======================================================
+// 3. KPI UNITS & DEFINITIONS
+// ======================================================
+
+model KpiUnit {
+  id          BigInt  @id @default(autoincrement())
+  name        String  @db.VarChar(100)
+  code        String  @unique @db.VarChar(30)
+  description String? @db.VarChar(255)
+  isActive    Boolean @default(true) @map("is_active")
+
+  kpiDefinitions KpiDefinition[]
+
+  @@map("kpi_units")
+}
+
+model KpiDefinition {
+  id              BigInt   @id @default(autoincrement())
+  name            String   @db.VarChar(200)
+  code            String   @unique @db.VarChar(50)
+  description     String?
+  unitId          BigInt   @map("unit_id")
+  /// STEP, LINEAR, RESULT_PERCENTAGE, PER_UNIT, FIXED, MANUAL
+  calculationType String   @map("calculation_type") @db.VarChar(50)
+  /// SUM, COUNT, COUNT_DISTINCT, COUNT_DISTINCT_POSITIVE
+  aggregation     String?  @db.VarChar(30)
+  /// Yadrodagi SALES_LINE_FIELDS kalitlari (amount, quantity, client_id ...)
+  sourceField     String?  @map("source_field") @db.VarChar(100)
+  /// OWN / TEAM
+  scope           String   @default("OWN") @db.VarChar(20)
+  /// scope = TEAM bo'lsa majburiy: SUPERVISOR / OPERATOR
+  teamLinkType    String?  @map("team_link_type") @db.VarChar(20)
+  /// EXCEL / ERP / MANUAL
+  factSource      String   @map("fact_source") @db.VarChar(50)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  unit         KpiUnit               @relation(fields: [unitId], references: [id])
+  rules        KpiRule[]
+  positionKpis PositionKpi[]
+  overrides    EmployeeKpiOverride[]
+  plans        KpiPlan[]
+  facts        KpiFact[]
+  results      KpiResult[]
+
+  @@map("kpi_definitions")
+}
+
+// ======================================================
+// 4. KPI RULES
+// ======================================================
+
+model KpiRule {
+  id            BigInt   @id @default(autoincrement())
+  kpiId         BigInt   @map("kpi_id")
+  name          String   @db.VarChar(200)
+  /// Kichik raqam = birinchi tekshiriladi (DECISIONS 2.2).
+  priority      Int      @default(1)
+  /// Hisoblash turi parametrlari: percent, rate_per_unit, amount, min_achievement ...
+  configuration Json?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  kpi         KpiDefinition   @relation(fields: [kpiId], references: [id])
+  steps       KpiRuleStep[]
+  filters     KpiRuleFilter[]
+  resultRules KpiResultRule[]
+
+  @@unique([kpiId, priority])
+  @@map("kpi_rules")
+}
+
+/// STEP calculation is CUMULATIVE.
+model KpiRuleStep {
+  id               BigInt   @id @default(autoincrement())
+  kpiRuleId        BigInt   @map("kpi_rule_id")
+  minPercent       Decimal  @map("min_percent") @db.Decimal(10, 2)
+  maxPercent       Decimal? @map("max_percent") @db.Decimal(10, 2)
+  coefficient      Decimal  @db.Decimal(10, 4)
+  maxRewardPercent Decimal? @map("max_reward_percent") @db.Decimal(10, 2)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  kpiRule KpiRule @relation(fields: [kpiRuleId], references: [id])
+
+  @@unique([kpiRuleId, minPercent])
+  @@map("kpi_rule_steps")
+}
+
+model KpiRuleFilter {
+  id        BigInt   @id @default(autoincrement())
+  kpiRuleId BigInt   @map("kpi_rule_id")
+  /// product_id, product_group_id, client_id, client_category_id, price_type_id ...
+  fieldName String   @map("field_name") @db.VarChar(100)
+  /// =, !=, IN, NOT_IN, >, >=, <, <=
+  operator  String   @db.VarChar(30)
+  /// ID'lar (kodlar emas) — DECISIONS 2.2
+  values    Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  kpiRule KpiRule @relation(fields: [kpiRuleId], references: [id])
+
+  @@index([kpiRuleId])
+  @@map("kpi_rule_filters")
+}
+
+// ======================================================
+// 5. KPI ASSIGNMENT
+// ======================================================
+
+model PositionKpi {
+  id         BigInt    @id @default(autoincrement())
+  positionId BigInt    @map("position_id")
+  kpiId      BigInt    @map("kpi_id")
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime? @map("end_date") @db.Date
+  isActive   Boolean   @default(true) @map("is_active")
+
+  position Position      @relation(fields: [positionId], references: [id])
+  kpi      KpiDefinition @relation(fields: [kpiId], references: [id])
+
+  @@unique([positionId, kpiId, startDate])
+  @@map("position_kpis")
+}
+
+model EmployeeKpiOverride {
+  id         BigInt    @id @default(autoincrement())
+  employeeId BigInt    @map("employee_id")
+  kpiId      BigInt    @map("kpi_id")
+  /// ADD / REMOVE
+  action     String    @db.VarChar(20)
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime? @map("end_date") @db.Date
+  isActive   Boolean   @default(true) @map("is_active")
+
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  kpi      KpiDefinition @relation(fields: [kpiId], references: [id])
+
+  @@unique([employeeId, kpiId, startDate])
+  @@map("employee_kpi_overrides")
+}
+
+// ======================================================
+// 6. PAYROLL PERIOD
+// ======================================================
+
+model PayrollPeriod {
+  id           BigInt    @id @default(autoincrement())
+  year         Int
+  month        Int
+  /// OPEN / REVIEW / CLOSED
+  status       String    @default("OPEN") @db.VarChar(30)
+  calculatedBy BigInt?   @map("calculated_by")
+  calculatedAt DateTime? @map("calculated_at") @db.Timestamp(6)
+  submittedBy  BigInt?   @map("submitted_by")
+  submittedAt  DateTime? @map("submitted_at") @db.Timestamp(6)
+  closedBy     BigInt?   @map("closed_by")
+  openedAt     DateTime? @map("opened_at") @db.Timestamp(6)
+  closedAt     DateTime? @map("closed_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  calculatedByUser User? @relation("PeriodCalculatedBy", fields: [calculatedBy], references: [id])
+  submittedByUser  User? @relation("PeriodSubmittedBy", fields: [submittedBy], references: [id])
+  closedByUser     User? @relation("PeriodClosedBy", fields: [closedBy], references: [id])
+
+  kpiPlans           KpiPlan[]
+  importBatches      ImportBatch[]
+  kpiFacts           KpiFact[]
+  kpiResults         KpiResult[]
+  payrolls           Payroll[]
+  bonuses            Bonus[]
+  penalties          Penalty[]
+  advances           Advance[]
+  deposits           Deposit[]
+  depositWithdrawals DepositWithdrawal[]
+  debtsFromPeriod    EmployeeDebt[]      @relation("DebtSourcePeriod")
+  debtsToPeriod      EmployeeDebt[]      @relation("DebtTargetPeriod")
+  recalculationsFrom Recalculation[]     @relation("RecalculationSourcePeriod")
+  recalculationsTo   Recalculation[]     @relation("RecalculationTargetPeriod")
+
+  @@unique([year, month])
+  @@map("payroll_periods")
+}
+
+// ======================================================
+// 7. MONTHLY KPI PLAN
+// ======================================================
+
+model KpiPlan {
+  id            BigInt   @id @default(autoincrement())
+  periodId      BigInt   @map("period_id")
+  employeeId    BigInt   @map("employee_id")
+  kpiId         BigInt   @map("kpi_id")
+  planValue     Decimal? @map("plan_value") @db.Decimal(18, 4)
+  baseAmount    Decimal? @map("base_amount") @db.Decimal(18, 2)
+  /// MANUAL turidagi KPI uchun qo'lda kiritilgan summa.
+  manualAmount  Decimal? @map("manual_amount") @db.Decimal(18, 2)
+  /// Excel'dan kelgan bo'lsa — qaysi versiyadan. Qo'lda → NULL.
+  importBatchId BigInt?  @map("import_batch_id")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  period      PayrollPeriod @relation(fields: [periodId], references: [id])
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  kpi         KpiDefinition @relation(fields: [kpiId], references: [id])
+  importBatch ImportBatch?  @relation(fields: [importBatchId], references: [id])
+
+  @@unique([periodId, employeeId, kpiId])
+  @@map("kpi_plans")
+}
+
+// ======================================================
+// 8. SALES REFERENCE DATA
+// ======================================================
+
+model ProductGroup {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  code      String?  @unique @db.VarChar(50)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  products Product[]
+
+  @@map("product_groups")
+}
+
+model Product {
+  id             BigInt   @id @default(autoincrement())
+  name           String   @db.VarChar(200)
+  code           String   @unique @db.VarChar(50)
+  productGroupId BigInt   @map("product_group_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  productGroup ProductGroup @relation(fields: [productGroupId], references: [id])
+  salesLines   SalesLine[]
+
+  @@map("products")
+}
+
+model ClientCategory {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  code      String?  @unique @db.VarChar(50)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  clients Client[]
+
+  @@map("client_categories")
+}
+
+model Client {
+  id               BigInt   @id @default(autoincrement())
+  name             String   @db.VarChar(200)
+  code             String   @unique @db.VarChar(50)
+  clientCategoryId BigInt?  @map("client_category_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  clientCategory ClientCategory? @relation(fields: [clientCategoryId], references: [id])
+  salesLines     SalesLine[]
+
+  @@map("clients")
+}
+
+model PriceType {
+  id       BigInt  @id @default(autoincrement())
+  name     String  @db.VarChar(100)
+  code     String  @unique @db.VarChar(50)
+  isActive Boolean @default(true) @map("is_active")
+
+  salesLines SalesLine[]
+
+  @@map("price_types")
+}
+
+// ======================================================
+// 9. EXCEL IMPORT
+// ======================================================
+
+/// Uchala unique indeks NULLS NOT DISTINCT (constraints migratsiyasi, qo'lda SQL).
+/// version_key va file_hash_key shu yerda ham e'lon qilingan — Prisma ularni
+/// "ortiqcha" deb o'chirmasligi uchun; NULLS NOT DISTINCT ni Prisma ko'rmaydi.
+/// (period_id, import_type) WHERE status = 'ACTIVE' — faqat qo'lda SQL'da.
+model ImportBatch {
+  id            BigInt   @id @default(autoincrement())
+  /// SALES va PLANS uchun majburiy; ma'lumotnoma importlarida NULL.
+  periodId      BigInt?  @map("period_id")
+  fileName      String   @map("file_name") @db.VarChar(255)
+  /// SHA-256 (64 belgi)
+  fileHash      String   @map("file_hash") @db.VarChar(64)
+  /// SALES, PLANS, EMPLOYEES, TEAM_LINKS, PRODUCTS, CLIENTS
+  importType    String   @map("import_type") @db.VarChar(30)
+  versionNumber Int      @map("version_number")
+  /// ACTIVE / ARCHIVED / INVALID / COMPARISON
+  status        String   @db.VarChar(20)
+  importedBy    BigInt   @map("imported_by")
+  importedAt    DateTime @default(now()) @map("imported_at") @db.Timestamp(6)
+
+  period         PayrollPeriod? @relation(fields: [periodId], references: [id])
+  importedByUser User           @relation(fields: [importedBy], references: [id])
+  rows           ImportRow[]
+  salesLines     SalesLine[]
+  kpiPlans       KpiPlan[]
+  kpiFacts       KpiFact[]
+
+  @@unique([periodId, importType, versionNumber], map: "import_batches_version_key")
+  @@unique([periodId, importType, fileHash], map: "import_batches_file_hash_key")
+  @@map("import_batches")
+}
+
+model ImportRow {
+  id         BigInt   @id @default(autoincrement())
+  batchId    BigInt   @map("batch_id")
+  rowNumber  Int      @map("row_number")
+  /// Faqat employee_id (biznes kodi) bo'yicha moslanadi.
+  employeeId String?  @map("employee_id") @db.VarChar(50)
+  rawData    Json?    @map("raw_data")
+  isValid    Boolean  @default(true) @map("is_valid")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  batch            ImportBatch       @relation(fields: [batchId], references: [id])
+  validationErrors ValidationError[]
+  salesLines       SalesLine[]
+
+  @@unique([batchId, rowNumber])
+  @@map("import_rows")
+}
+
+model ValidationError {
+  id           BigInt   @id @default(autoincrement())
+  importRowId  BigInt   @map("import_row_id")
+  fieldName    String?  @map("field_name") @db.VarChar(100)
+  errorMessage String   @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  importRow ImportRow @relation(fields: [importRowId], references: [id])
+
+  @@index([importRowId])
+  @@map("validation_errors")
+}
+
+// ======================================================
+// 10. NORMALIZED SALES DATA
+// ======================================================
+
+/// period_id yo'q — davr import_batch orqali olinadi.
+model SalesLine {
+  id               BigInt    @id @default(autoincrement())
+  importBatchId    BigInt    @map("import_batch_id")
+  importRowId      BigInt    @map("import_row_id")
+  employeeId       BigInt    @map("employee_id")
+  productId        BigInt    @map("product_id")
+  clientId         BigInt    @map("client_id")
+  priceTypeId      BigInt    @map("price_type_id")
+  saleDate         DateTime  @map("sale_date") @db.Date
+  /// Faqat qaytarish qatorlarida (shablondagi asl_sotuv_sanasi).
+  originalSaleDate DateTime? @map("original_sale_date") @db.Date
+  /// Manfiy bo'lishi MUMKIN (qaytarishlar).
+  quantity         Decimal?  @db.Decimal(18, 4)
+  /// Manfiy bo'lishi MUMKIN (qaytarishlar).
+  amount           Decimal?  @db.Decimal(18, 2)
+  rawData          Json?     @map("raw_data")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
+  importRow   ImportRow   @relation(fields: [importRowId], references: [id])
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+  client      Client      @relation(fields: [clientId], references: [id])
+  priceType   PriceType   @relation(fields: [priceTypeId], references: [id])
+
+  @@index([importBatchId])
+  @@index([importBatchId, employeeId])
+  @@index([productId])
+  @@index([clientId])
+  @@index([priceTypeId])
+  @@map("sales_lines")
+}
+
+// ======================================================
+// 11. KPI FACT
+// ======================================================
+
+model KpiFact {
+  id            BigInt    @id @default(autoincrement())
+  periodId      BigInt    @map("period_id")
+  employeeId    BigInt    @map("employee_id")
+  kpiId         BigInt    @map("kpi_id")
+  /// NULL = qo'lda kiritilgan. Aks holda — qaysi ACTIVE versiyadan.
+  importBatchId BigInt?   @map("import_batch_id")
+  /// Manfiy bo'lishi mumkin (qaytarishlar) — DECISIONS 2.3
+  factValue     Decimal   @map("fact_value") @db.Decimal(18, 4)
+  calculatedAt  DateTime? @map("calculated_at") @db.Timestamp(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  period      PayrollPeriod @relation(fields: [periodId], references: [id])
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  kpi         KpiDefinition @relation(fields: [kpiId], references: [id])
+  importBatch ImportBatch?  @relation(fields: [importBatchId], references: [id])
+
+  @@unique([periodId, employeeId, kpiId])
+  @@map("kpi_facts")
+}
+
+// ======================================================
+// 12. KPI RESULT
+// ======================================================
+
+model KpiResult {
+  id                 BigInt   @id @default(autoincrement())
+  periodId           BigInt   @map("period_id")
+  employeeId         BigInt   @map("employee_id")
+  kpiId              BigInt   @map("kpi_id")
+  planValue          Decimal? @map("plan_value") @db.Decimal(18, 4)
+  factValue          Decimal? @map("fact_value") @db.Decimal(18, 4)
+  /// Hisob paytidagi baza (snapshot)
+  baseAmount         Decimal? @map("base_amount") @db.Decimal(18, 2)
+  achievementPercent Decimal? @map("achievement_percent") @db.Decimal(10, 4)
+  /// = Σ kpi_result_rules.amount (yaxlitlangan qatorlar yig'indisi)
+  kpiAmount          Decimal  @map("kpi_amount") @db.Decimal(18, 2)
+  calculatedAt       DateTime @default(now()) @map("calculated_at") @db.Timestamp(6)
+
+  period   PayrollPeriod   @relation(fields: [periodId], references: [id])
+  employee Employee        @relation(fields: [employeeId], references: [id])
+  kpi      KpiDefinition   @relation(fields: [kpiId], references: [id])
+  rules    KpiResultRule[]
+
+  @@unique([periodId, employeeId, kpiId])
+  @@map("kpi_results")
+}
+
+/// Har qoidaning o'z fakti va summasi (Ekspeditor: 3 qoida).
+model KpiResultRule {
+  id                 BigInt   @id @default(autoincrement())
+  kpiResultId        BigInt   @map("kpi_result_id")
+  kpiRuleId          BigInt   @map("kpi_rule_id")
+  factValue          Decimal? @map("fact_value") @db.Decimal(18, 4)
+  achievementPercent Decimal? @map("achievement_percent") @db.Decimal(10, 4)
+  payoutPercent      Decimal? @map("payout_percent") @db.Decimal(10, 4)
+  /// Butun so'mgacha yaxlitlangan.
+  amount             Decimal  @db.Decimal(18, 2)
+  /// Masalan ["NEGATIVE_FACT"]
+  warnings           Json?
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  kpiResult KpiResult @relation(fields: [kpiResultId], references: [id])
+  kpiRule   KpiRule   @relation(fields: [kpiRuleId], references: [id])
+
+  @@unique([kpiResultId, kpiRuleId])
+  @@map("kpi_result_rules")
+}
+
+// ======================================================
+// 13. PAYROLL
+// ======================================================
+
+model Payroll {
+  id                  BigInt   @id @default(autoincrement())
+  periodId            BigInt   @map("period_id")
+  employeeId          BigInt   @map("employee_id")
+  fixedSalary         Decimal  @default(0) @map("fixed_salary") @db.Decimal(18, 2)
+  kpiTotal            Decimal  @default(0) @map("kpi_total") @db.Decimal(18, 2)
+  bonusTotal          Decimal  @default(0) @map("bonus_total") @db.Decimal(18, 2)
+  penaltyTotal        Decimal  @default(0) @map("penalty_total") @db.Decimal(18, 2)
+  advanceTotal        Decimal  @default(0) @map("advance_total") @db.Decimal(18, 2)
+  depositAmount       Decimal  @default(0) @map("deposit_amount") @db.Decimal(18, 2)
+  /// Manfiy ham bo'lishi mumkin
+  recalculationAmount Decimal  @default(0) @map("recalculation_amount") @db.Decimal(18, 2)
+  debtCarryoverAmount Decimal  @default(0) @map("debt_carryover_amount") @db.Decimal(18, 2)
+  depositReturnAmount Decimal  @default(0) @map("deposit_return_amount") @db.Decimal(18, 2)
+  /// gross = fixed + kpi + bonus (qayta hisob KIRMAYDI)
+  grossAmount         Decimal  @map("gross_amount") @db.Decimal(18, 2)
+  /// Manfiy bo'lishi mumkin
+  netAmount           Decimal  @map("net_amount") @db.Decimal(18, 2)
+  /// payable = max(net, 0)
+  payableAmount       Decimal  @map("payable_amount") @db.Decimal(18, 2)
+  /// Masalan ["NEGATIVE_NET_AMOUNT"]
+  warnings            Json?
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  period   PayrollPeriod    @relation(fields: [periodId], references: [id])
+  employee Employee         @relation(fields: [employeeId], references: [id])
+  items    PayrollItem[]
+  payments PayrollPayment[]
+
+  @@unique([periodId, employeeId])
+  @@map("payrolls")
+}
+
+model PayrollItem {
+  id          BigInt   @id @default(autoincrement())
+  payrollId   BigInt   @map("payroll_id")
+  /// FIXED_SALARY, KPI, BONUS, PENALTY, ADVANCE, DEPOSIT, DEPOSIT_RETURN, RECALCULATION, DEBT_CARRYOVER
+  itemType    String   @map("item_type") @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  amount      Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  payroll Payroll @relation(fields: [payrollId], references: [id])
+
+  @@index([payrollId])
+  @@map("payroll_items")
+}
+
+/// CARD + CASH = payrolls.payable_amount (servis tekshiradi).
+model PayrollPayment {
+  id        BigInt   @id @default(autoincrement())
+  payrollId BigInt   @map("payroll_id")
+  /// CARD / CASH
+  method    String   @db.VarChar(20)
+  amount    Decimal  @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  payroll Payroll @relation(fields: [payrollId], references: [id])
+
+  @@unique([payrollId, method])
+  @@map("payroll_payments")
+}
+
+// ======================================================
+// 14. BONUS / PENALTY / ADVANCE
+// ======================================================
+
+model Bonus {
+  id          BigInt   @id @default(autoincrement())
+  employeeId  BigInt   @map("employee_id")
+  periodId    BigInt   @map("period_id")
+  name        String   @db.VarChar(150)
+  amount      Decimal  @db.Decimal(18, 2)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  period   PayrollPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([periodId, employeeId])
+  @@map("bonuses")
+}
+
+model Penalty {
+  id          BigInt   @id @default(autoincrement())
+  employeeId  BigInt   @map("employee_id")
+  periodId    BigInt   @map("period_id")
+  name        String   @db.VarChar(150)
+  amount      Decimal  @db.Decimal(18, 2)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  period   PayrollPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([periodId, employeeId])
+  @@map("penalties")
+}
+
+model Advance {
+  id          BigInt   @id @default(autoincrement())
+  employeeId  BigInt   @map("employee_id")
+  periodId    BigInt   @map("period_id")
+  /// Oldin berilgan. Yakuniy to'lanadigan summadan ayiriladi.
+  amount      Decimal  @db.Decimal(18, 2)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  period   PayrollPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([periodId, employeeId])
+  @@map("advances")
+}
+
+// ======================================================
+// 15. DEPOSIT
+// ======================================================
+
+/// Faqat oylik yig'ilish yozuvlari (status, paid_at yo'q).
+model Deposit {
+  id             BigInt   @id @default(autoincrement())
+  employeeId     BigInt   @map("employee_id")
+  periodId       BigInt   @map("period_id")
+  /// gross − penalty (avans va qarz kirmaydi)
+  baseAmount     Decimal  @map("base_amount") @db.Decimal(18, 2)
+  /// Hisob paytidagi positions.deposit_percent (snapshot)
+  depositPercent Decimal  @map("deposit_percent") @db.Decimal(10, 2)
+  depositAmount  Decimal  @map("deposit_amount") @db.Decimal(18, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  period   PayrollPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([employeeId, periodId])
+  @@map("deposits")
+}
+
+/// Balans = Σ deposits.deposit_amount − Σ deposit_withdrawals.amount
+model DepositWithdrawal {
+  id         BigInt   @id @default(autoincrement())
+  employeeId BigInt   @map("employee_id")
+  periodId   BigInt   @map("period_id")
+  amount     Decimal  @db.Decimal(18, 2)
+  reason     String
+  /// PAYROLL / SEPARATE
+  payoutType String   @map("payout_type") @db.VarChar(20)
+  createdBy  BigInt   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  period        PayrollPeriod @relation(fields: [periodId], references: [id])
+  createdByUser User          @relation(fields: [createdBy], references: [id])
+
+  @@index([employeeId])
+  @@index([periodId])
+  @@map("deposit_withdrawals")
+}
+
+// ======================================================
+// 16. DEBT
+// ======================================================
+
+model EmployeeDebt {
+  id             BigInt   @id @default(autoincrement())
+  employeeId     BigInt   @map("employee_id")
+  sourcePeriodId BigInt   @map("source_period_id")
+  targetPeriodId BigInt   @map("target_period_id")
+  amount         Decimal  @db.Decimal(18, 2)
+  /// PENDING / APPLIED
+  status         String   @default("PENDING") @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  employee     Employee      @relation(fields: [employeeId], references: [id])
+  sourcePeriod PayrollPeriod @relation("DebtSourcePeriod", fields: [sourcePeriodId], references: [id])
+  targetPeriod PayrollPeriod @relation("DebtTargetPeriod", fields: [targetPeriodId], references: [id])
+
+  @@unique([employeeId, sourcePeriodId])
+  @@index([targetPeriodId])
+  @@map("employee_debts")
+}
+
+// ======================================================
+// 17. RECALCULATION
+// ======================================================
+
+model Recalculation {
+  id             BigInt   @id @default(autoincrement())
+  employeeId     BigInt   @map("employee_id")
+  sourcePeriodId BigInt   @map("source_period_id")
+  targetPeriodId BigInt   @map("target_period_id")
+  /// Manfiy ham bo'lishi mumkin
+  amount         Decimal  @db.Decimal(18, 2)
+  reason         String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy      BigInt   @map("created_by")
+
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  sourcePeriod  PayrollPeriod @relation("RecalculationSourcePeriod", fields: [sourcePeriodId], references: [id])
+  targetPeriod  PayrollPeriod @relation("RecalculationTargetPeriod", fields: [targetPeriodId], references: [id])
+  createdByUser User          @relation(fields: [createdBy], references: [id])
+
+  @@map("recalculations")
+}
+
+// ======================================================
+// 18. AUDIT
+// ======================================================
+
+/// Faqat INSERT. UPDATE/DELETE trigger bilan taqiqlanadi.
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt?  @map("user_id")
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(100)
+  entityId   BigInt?  @map("entity_id")
+  oldData    Json?    @map("old_data")
+  newData    Json?    @map("new_data")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

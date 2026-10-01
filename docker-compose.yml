@@ -1,0 +1,23 @@
+# Lokal ishlab chiqish uchun PostgreSQL.
+# Host porti 5433 — kompyuterdagi boshqa PostgreSQL (5432) bilan to'qnashmasligi uchun.
+services:
+  db:
+    image: postgres:16
+    container_name: elma-payroll-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: elma
+      POSTGRES_PASSWORD: elma
+      POSTGRES_DB: elma_payroll
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elma -d elma_payroll"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

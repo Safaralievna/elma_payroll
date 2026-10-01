@@ -2,48 +2,81 @@
 
 ```
 elma-payroll/
-├── backend/        NestJS + TypeScript (keyinchalik Prisma + PostgreSQL)
+├── docker-compose.yml          PostgreSQL 16 (lokal, port 5433)
+├── backend/                    NestJS + TypeScript + Prisma 7
+│   ├── prisma/
+│   │   ├── schema.prisma           41 jadval (manba: docs/ERD_v2.dbml)
+│   │   ├── migrations/             init (Prisma) + constraints (qo'lda SQL)
+│   │   └── seed.ts                 rollar, admin, lavozimlar, namuna KPI
+│   ├── prisma.config.ts
 │   ├── src/
-│   │   ├── main.ts
-│   │   ├── app.module.ts
-│   │   └── calculation/          ← 1-bosqich: hisoblash yadrosi (bazasiz, UI'siz)
-│   │       ├── decimal.ts            pul arifmetikasi (decimal.js), yaxlitlash
-│   │       ├── kpi-engine.ts         KPI qoidasini hisoblash, achievement = fact / plan
-│   │       ├── calculators/          STEP, LINEAR, RESULT_PERCENTAGE, PER_UNIT, FIXED, MANUAL
-│   │       ├── filters.ts            kpi_rule_filters (=, !=, IN, NOT_IN, >, <, ...)
-│   │       ├── aggregation.ts        SUM, COUNT, COUNT_DISTINCT (AKB)
-│   │       ├── fact.ts               scope (OWN/TEAM) → filtr → aggregation
-│   │       ├── payroll.ts            gross, depozit, net
-│   │       ├── import-activation.ts  import versiyalari (ACTIVE/ARCHIVED)
-│   │       └── __tests__/            test_cases.json + Excel + chegara holatlari
-│   └── test/fixtures/test_cases.json
-├── frontend/       (keyinroq) React + TypeScript + Tailwind
-└── docs/ERD_TAHLIL.md            ERD/flowchart tahlili va ochiq savollar
+│   │   ├── calculation/            hisoblash yadrosi (bazasiz, toza funksiyalar)
+│   │   ├── prisma/                 PrismaService + PrismaModule
+│   │   └── generated/prisma/       generatsiya qilingan klient (git'da yo'q)
+│   └── test/
+│       ├── fixtures/test_cases.json
+│       └── db/                     DB cheklovlari testlari (npm run test:db)
+├── frontend/                   (keyinroq) React + TypeScript + Tailwind
+└── docs/
+    ├── DECISIONS.md                tasdiqlangan biznes qarorlari
+    ├── PLAN.md                     bosqichlar va holat
+    ├── ERD_v2.dbml                 baza sxemasi — yagona manba
+    └── ERD_v1.dbml                 asl tasdiqlangan ERD (tarix uchun)
 ```
 
 ## Ishga tushirish
 
-Node.js 20 yoki undan yangi versiya kerak.
+Kerak: Node.js 20+, Docker.
 
 ```bash
+# 1. Baza (loyiha ildizida)
+docker compose up -d
+
+# 2. Backend
 cd backend
-npm install
-npm test          # 48 ta test
-npm run typecheck
+cp .env.example .env        # kerak bo'lsa SEED_ADMIN_PASSWORD ni o'zgartiring
+npm install                 # postinstall: prisma generate
+npm run db:migrate          # migratsiyalarni qo'llash
+npm run db:seed             # boshlang'ich ma'lumotlar (qayta ishga tushirsa ham xavfsiz)
+npm run start:dev
 ```
 
-## Ish tartibi (team lead)
+Seed `admin` foydalanuvchisini yaratadi, paroli — `.env` dagi `SEED_ADMIN_PASSWORD`.
 
-1. ✅ Hisoblash yadrosi: STEP, LINEAR, %, dona uchun, depozit, net.
-2. ⏳ Prisma sxemasi → import → sales_lines → faktlar.
-3. Payroll va depozit (DB bilan).
-4. Davr statuslari: OPEN → REVIEW → CLOSED.
-5. Interfeys.
+## Tekshiruvlar
+
+```bash
+npm test                # hisoblash yadrosi testlari (bazasiz)
+npm run typecheck       # TypeScript
+npm run test:db         # DB cheklovlari — Docker'dagi bazada (alohida elma_payroll_test)
+npm run db:check-drift  # schema.prisma va baza bir xilmi — "No difference detected" bo'lishi shart
+```
+
+`test:db` har safar `elma_payroll_test` bazasini noldan yaratadi — asosiy `elma_payroll` ga tegmaydi.
+
+## Sxemani o'zgartirish
+
+1. Avval `docs/ERD_v2.dbml` (team lead tasdig'i bilan), keyin `prisma/schema.prisma`.
+2. `npx prisma migrate dev --create-only --name <nom>` → hosil bo'lgan SQL ni ko'rib chiqing; Prisma yoza olmaydigan cheklovlarni (CHECK, EXCLUDE, partial unique, trigger) shu faylga qo'lda qo'shing.
+3. `npm run db:migrate`, so'ng `npm run db:check-drift` — farq bo'lmasligi kerak.
+
+`prisma migrate dev` ni migratsiyasiz ishlatmang: u interaktiv bo'lib qotib qolishi mumkin. Farqni `db:check-drift` bilan tekshiring.
+
+## DataGrip (yoki boshqa SQL klient) bilan ulanish
+
+| Maydon   | Qiymat         |
+|----------|----------------|
+| Host     | `localhost`    |
+| Port     | `5433`         |
+| User     | `elma`         |
+| Password | `elma`         |
+| Database | `elma_payroll` |
+
+URL: `jdbc:postgresql://localhost:5433/elma_payroll`. Port 5433 — kompyuterdagi boshqa PostgreSQL (5432) bilan to'qnashmasligi uchun.
 
 ## Asosiy qoidalar
 
-- **Pul.** Hisob-kitob faqat `decimal.js` bilan qilinadi, `number` ishlatilmaydi. Oraliq qiymatlar yaxlitlanmaydi, yakuniy summa half-up bilan butun so'mgacha yaxlitlanadi.
-- **Formula.** `gross = fixed + kpi + bonus`, `net = gross − penalty − deposit − advance + recalculation`.
-- **Depozit.** `(gross − penalty) × deposit_percent`, avans bazaga kirmaydi.
-- **Plan.** Faqat STEP va LINEAR'da kerak. Plan ≤ 0 yoki kiritilmagan bo'lsa, `CalculationError` qaytadi, hisob jim o'tkazib yuborilmaydi.
-- **Konfiguratsiya.** Pog'onalar, foizlar va stavkalar kodda emas, DB konfiguratsiyasida saqlanadi.
+- **Pul.** Hisob-kitob faqat `decimal.js` bilan, `number` ishlatilmaydi. Har bir hisob qatori butun so'mgacha (half-up) yaxlitlanadi. DB'da pul `Decimal(18,2)`.
+- **Formula va qarorlar** — `docs/DECISIONS.md` (gross, depozit, net, qarz, qaytarishlar).
+- **Konfiguratsiya.** Pog'onalar, foizlar va stavkalar kodda emas, DB'da saqlanadi.
+- **Cheklovlar bazada.** Status ro'yxatlari, sanalar, ustma-ust tushmaslik, bitta ACTIVE import, `audit_logs` o'zgarmasligi — migratsiyadagi SQL bilan himoyalangan.

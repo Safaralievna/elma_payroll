@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
+import { PrismaModule } from './prisma/prisma.module';
 
 /**
  * Ildiz modul.
  *
- * 1-bosqichda hisoblash yadrosi (src/calculation) NestJS'ga bog'lanmagan toza
- * funksiyalardan iborat — u bazasiz va HTTP'siz testlanadi. Keyingi bosqichlarda
- * bu yerga PrismaModule, OrganizationModule, KpiModule, ImportModule,
- * PayrollModule va boshqalar qo'shiladi.
+ * Hisoblash yadrosi (src/calculation) NestJS'ga bog'lanmagan toza funksiyalar —
+ * u bazasiz va HTTP'siz testlanadi. PrismaModule global: hamma servislar
+ * PrismaService'ni inject qila oladi. Keyingi bosqichlarda bu yerga
+ * AuthModule, OrganizationModule, KpiModule, ImportModule, PayrollModule qo'shiladi.
  */
 @Module({
-  imports: [],
+  imports: [PrismaModule],
 })
 export class AppModule {}

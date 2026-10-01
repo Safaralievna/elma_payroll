@@ -491,9 +491,12 @@ Table import_batches {
   imported_at timestamp [not null, default: `now()`]
 
   indexes {
-    (period_id, import_type, version_number) [unique]
-    // [v2] Qo'lda SQL:
-    // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type) WHERE status = 'ACTIVE';
+    // [v2] Hamma uchala indeks NULLS NOT DISTINCT — period_id = NULL bo'lgan
+    // ma'lumotnoma importlari (EMPLOYEES, PRODUCTS ...) ham bitta "davr" kabi
+    // hisoblanadi: bitta ACTIVE, takrorlanmaydigan versiya va file_hash.
+    // Qo'lda SQL:
+    // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type, version_number) NULLS NOT DISTINCT;
+    // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type) NULLS NOT DISTINCT WHERE status = 'ACTIVE';
     // CREATE UNIQUE INDEX ... ON import_batches (period_id, import_type, file_hash) NULLS NOT DISTINCT;
   }
 }

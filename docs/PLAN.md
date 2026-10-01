@@ -8,7 +8,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 |---|---------|-------|
 | 1 | Hisoblash yadrosi (STEP, LINEAR, %, dona uchun, depozit, net) + `test_cases.json` | ✅ |
 | 1.1 | Yadroni yangi qarorlarga moslash (`docs/DECISIONS.md` 1–3) | ✅ |
-| 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ⏳ |
+| 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ✅ |
 | 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ⏳ |
 | 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ⏳ |
 | 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ⏳ |
@@ -38,7 +38,11 @@ Yangi funksiyalar: `calculateKpiRuleFacts`, `separatePriorPeriodReturns`, `calcu
 
 ---
 
-## 2-bosqich — Baza: ERD v2 → Prisma
+## 2-bosqich — Baza: ERD v2 → Prisma ✅
+
+Natija: `npm test` 79/79, `npm run typecheck` xatosiz, `npm run test:db` 30/30, `npm run db:check-drift` — "No difference detected".
+Prisma 7.10.0 (driver adapter `@prisma/adapter-pg`). Docker bazasi — port **5433** (5432 band edi).
+`import_batches`: uchala unique indeks `NULLS NOT DISTINCT`; `version_key` va `file_hash_key` `schema.prisma` da ham `@@unique(map:)` bilan e'lon qilingan — aks holda Prisma ularni o'chirishga urinadi.
 
 Manba: `docs/ERD_v2.dbml` (41 jadval). Undan chetga chiqilmaydi.
 
