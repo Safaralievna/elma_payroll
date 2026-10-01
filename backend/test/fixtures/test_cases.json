@@ -1,0 +1,376 @@
+{
+  "izoh": "Barcha summalar so'mda. Hisoblash kodi (calculation service) shu testlardan o'tishi kerak.",
+  "1_step_kumulyativ": {
+    "qoida": "Har bir o'tilgan pog'ona to'liq qo'shiladi, oxirgisidan qismi. 70% va undan past = 0.",
+    "pogonalar": [
+      {
+        "min": 70,
+        "max": 80,
+        "coefficient": 2,
+        "max_reward_percent": 20
+      },
+      {
+        "min": 80,
+        "max": 90,
+        "coefficient": 3,
+        "max_reward_percent": 30
+      },
+      {
+        "min": 90,
+        "max": 100,
+        "coefficient": 5,
+        "max_reward_percent": 50
+      },
+      {
+        "min": 100,
+        "max": 150,
+        "coefficient": 1,
+        "max_reward_percent": 50
+      }
+    ],
+    "yaxlitlash": "half-up, butun so'mgacha",
+    "testlar": [
+      {
+        "plan": 1000000,
+        "fact": 650000,
+        "base": 2000000,
+        "achievement": 65.0,
+        "payout_percent": 0.0,
+        "kpi_amount": 0,
+        "note": "70% dan past → 0"
+      },
+      {
+        "plan": 1000000,
+        "fact": 700000,
+        "base": 2000000,
+        "achievement": 70.0,
+        "payout_percent": 0.0,
+        "kpi_amount": 0,
+        "note": "aynan 70% → 0"
+      },
+      {
+        "plan": 1000000,
+        "fact": 750000,
+        "base": 2000000,
+        "achievement": 75.0,
+        "payout_percent": 10.0,
+        "kpi_amount": 200000,
+        "note": ""
+      },
+      {
+        "plan": 1000000,
+        "fact": 800000,
+        "base": 2000000,
+        "achievement": 80.0,
+        "payout_percent": 20.0,
+        "kpi_amount": 400000,
+        "note": ""
+      },
+      {
+        "plan": 1450000,
+        "fact": 1171000,
+        "base": 2000000,
+        "achievement": 80.76,
+        "payout_percent": 22.28,
+        "kpi_amount": 445517,
+        "note": "Exceldagi haqiqiy qator"
+      },
+      {
+        "plan": 1000000,
+        "fact": 900000,
+        "base": 2000000,
+        "achievement": 90.0,
+        "payout_percent": 50.0,
+        "kpi_amount": 1000000,
+        "note": ""
+      },
+      {
+        "plan": 1000000,
+        "fact": 1000000,
+        "base": 2000000,
+        "achievement": 100.0,
+        "payout_percent": 100.0,
+        "kpi_amount": 2000000,
+        "note": ""
+      },
+      {
+        "plan": 1000000,
+        "fact": 1200000,
+        "base": 2000000,
+        "achievement": 120.0,
+        "payout_percent": 120.0,
+        "kpi_amount": 2400000,
+        "note": "ASOSIY TEST: 400 000 chiqsa — xato"
+      },
+      {
+        "plan": 1000000,
+        "fact": 1500000,
+        "base": 2000000,
+        "achievement": 150.0,
+        "payout_percent": 150.0,
+        "kpi_amount": 3000000,
+        "note": ""
+      },
+      {
+        "plan": 1000000,
+        "fact": 1800000,
+        "base": 2000000,
+        "achievement": 180.0,
+        "payout_percent": 150.0,
+        "kpi_amount": 3000000,
+        "note": "150% dan yuqori — o'smaydi"
+      },
+      {
+        "plan": 70,
+        "fact": 60,
+        "base": 100000,
+        "achievement": 85.71,
+        "payout_percent": 37.14,
+        "kpi_amount": 37143,
+        "note": "Exceldagi haqiqiy qator (AKB)"
+      },
+      {
+        "plan": 440,
+        "fact": 520,
+        "base": 100000,
+        "achievement": 118.18,
+        "payout_percent": 118.18,
+        "kpi_amount": 118182,
+        "note": "Exceldagi haqiqiy qator (dona)"
+      }
+    ]
+  },
+  "2_depozit": {
+    "qoida": "base = KPI + fiks + bonus - jarima; deposit = base x deposit_percent; avans ayirilmaydi",
+    "testlar": [
+      {
+        "kpi": 6740000,
+        "fixed": 0,
+        "bonus": 0,
+        "penalty": 300000,
+        "advance": 1000000,
+        "deposit_percent": 10,
+        "deposit_base": 6440000,
+        "deposit": 644000,
+        "net": 4796000
+      },
+      {
+        "kpi": 3000000,
+        "fixed": 2000000,
+        "bonus": 500000,
+        "penalty": 200000,
+        "advance": 0,
+        "deposit_percent": 10,
+        "deposit_base": 5300000,
+        "deposit": 530000,
+        "net": 4770000
+      },
+      {
+        "kpi": 3000000,
+        "fixed": 2000000,
+        "bonus": 0,
+        "penalty": 0,
+        "advance": 0,
+        "deposit_percent": null,
+        "deposit_base": null,
+        "deposit": 0,
+        "net": 5000000,
+        "izoh": "lavozimda depozit yo'q (masalan savdo vakili)"
+      }
+    ]
+  },
+  "3_aggregation": {
+    "sales_lines": [
+      {
+        "employee_id": "EMP001",
+        "client": "A",
+        "amount": 1000
+      },
+      {
+        "employee_id": "EMP001",
+        "client": "B",
+        "amount": 2000
+      },
+      {
+        "employee_id": "EMP001",
+        "client": "A",
+        "amount": 3000
+      },
+      {
+        "employee_id": "EMP001",
+        "client": "C",
+        "amount": 4000
+      }
+    ],
+    "testlar": [
+      {
+        "aggregation": "SUM",
+        "source_field": "amount",
+        "kutilgan": 10000
+      },
+      {
+        "aggregation": "COUNT",
+        "source_field": "client_id",
+        "kutilgan": 4
+      },
+      {
+        "aggregation": "COUNT_DISTINCT",
+        "source_field": "client_id",
+        "kutilgan": 3,
+        "izoh": "AKB"
+      }
+    ]
+  },
+  "4_filtrlar_yetkazib_berish": {
+    "sales_lines": [
+      {
+        "product": "101",
+        "price_type": "ULGURJI",
+        "amount": 20000000
+      },
+      {
+        "product": "112",
+        "price_type": "CHAKANA",
+        "amount": 30000000
+      },
+      {
+        "product": "407",
+        "price_type": "ULGURJI",
+        "amount": 5000000
+      }
+    ],
+    "rules": [
+      {
+        "name": "Ulgurji, 407 dan tashqari",
+        "filters": [
+          [
+            "price_type",
+            "=",
+            "ULGURJI"
+          ],
+          [
+            "product",
+            "NOT_IN",
+            [
+              "407"
+            ]
+          ]
+        ],
+        "percent": 5,
+        "kutilgan": 1000000
+      },
+      {
+        "name": "Chakana, 407 dan tashqari",
+        "filters": [
+          [
+            "price_type",
+            "=",
+            "CHAKANA"
+          ],
+          [
+            "product",
+            "NOT_IN",
+            [
+              "407"
+            ]
+          ]
+        ],
+        "percent": 10,
+        "kutilgan": 3000000
+      },
+      {
+        "name": "Faqat 407",
+        "filters": [
+          [
+            "product",
+            "IN",
+            [
+              "407"
+            ]
+          ]
+        ],
+        "percent": 2,
+        "kutilgan": 100000
+      }
+    ],
+    "kpi_jami": 4100000,
+    "izoh": "Rule ichidagi filtrlar AND. Bitta KPI dagi rule natijalari QO'SHILADI. 407 ulgurji qatori faqat 3-rule ga tushadi."
+  },
+  "5_per_unit": {
+    "qoida": "fact(dona) x rate",
+    "testlar": [
+      {
+        "fact_quantity": 50000,
+        "rate_per_unit": 100,
+        "kutilgan": 5000000,
+        "plan_kerakmi": false
+      }
+    ]
+  },
+  "6_team_scope": {
+    "qoida": "scope=TEAM bo'lsa fact = manager_id si shu xodim bo'lgan xodimlarning savdosi (xodimning o'z savdosi kirmaydi)",
+    "testlar": [
+      {
+        "operator": "EMP010",
+        "jamoa": [
+          {
+            "employee_id": "EMP001",
+            "manager_id": "EMP010",
+            "amount": 980000
+          },
+          {
+            "employee_id": "EMP002",
+            "manager_id": "EMP010",
+            "amount": 998000
+          },
+          {
+            "employee_id": "EMP003",
+            "manager_id": "EMP020",
+            "amount": 700000
+          }
+        ],
+        "kutilgan_fact": 1978000
+      }
+    ]
+  },
+  "7_plan_tekshiruvi": {
+    "testlar": [
+      {
+        "calculation_type": "STEP",
+        "plan": 0,
+        "kutilgan": "Validation error"
+      },
+      {
+        "calculation_type": "LINEAR",
+        "plan": null,
+        "kutilgan": "Validation error"
+      },
+      {
+        "calculation_type": "PER_UNIT",
+        "plan": null,
+        "kutilgan": "OK - plan shart emas"
+      },
+      {
+        "calculation_type": "RESULT_PERCENTAGE",
+        "plan": null,
+        "kutilgan": "OK - plan shart emas"
+      }
+    ]
+  },
+  "8_import_type": {
+    "testlar": [
+      {
+        "qadam": "SALES v1 yuklandi",
+        "kutilgan": "SALES v1 = ACTIVE"
+      },
+      {
+        "qadam": "PLANS v1 yuklandi",
+        "kutilgan": "SALES v1 hali ham ACTIVE, PLANS v1 = ACTIVE"
+      },
+      {
+        "qadam": "SALES v2 yuklandi",
+        "kutilgan": "SALES v1 = ARCHIVED, SALES v2 = ACTIVE, PLANS v1 = ACTIVE"
+      }
+    ]
+  }
+}
