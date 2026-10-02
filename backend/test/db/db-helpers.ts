@@ -14,6 +14,16 @@ export function testDatabaseUrl(): string {
 }
 
 /**
+ * E2E testlar (HTTP orqali, haqiqiy commit bilan) uchun alohida baza: ular yozgan
+ * ma'lumot (masalan, o'chirib bo'lmaydigan audit_logs) rollback testlariga ta'sir qilmasin.
+ */
+export function e2eDatabaseUrl(): string {
+  const url = new URL(testDatabaseUrl());
+  url.pathname = `${url.pathname}_e2e`;
+  return url.toString();
+}
+
+/**
  * Har bir test tranzaksiya ichida ishlaydi va oxirida ROLLBACK qilinadi —
  * baza toza qoladi (audit_logs ni TRUNCATE qilib bo'lmaydi, shuning uchun shunday).
  */

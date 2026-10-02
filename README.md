@@ -11,11 +11,16 @@ elma-payroll/
 │   ├── prisma.config.ts
 │   ├── src/
 │   │   ├── calculation/            hisoblash yadrosi (bazasiz, toza funksiyalar)
+│   │   ├── auth/                   login, JWT, rollar (guard'lar), login cheklovi
+│   │   ├── users/                  foydalanuvchilar va rollar (ADMIN)
+│   │   ├── audit/                  audit jurnali (faqat yozish/o'qish)
+│   │   ├── common/                 xato formati, Zod validatsiya
+│   │   ├── config/                 .env sozlamalarini tekshirish
 │   │   ├── prisma/                 PrismaService + PrismaModule
 │   │   └── generated/prisma/       generatsiya qilingan klient (git'da yo'q)
 │   └── test/
 │       ├── fixtures/test_cases.json
-│       └── db/                     DB cheklovlari testlari (npm run test:db)
+│       └── db/                     DB cheklovlari va E2E (HTTP) testlari (npm run test:db)
 ├── frontend/                   (keyinroq) React + TypeScript + Tailwind
 └── docs/
     ├── DECISIONS.md                tasdiqlangan biznes qarorlari
@@ -34,7 +39,7 @@ docker compose up -d
 
 # 2. Backend
 cd backend
-cp .env.example .env        # kerak bo'lsa SEED_ADMIN_PASSWORD ni o'zgartiring
+cp .env.example .env        # SEED_ADMIN_PASSWORD va JWT_SECRET (kamida 32 belgi) ni o'zgartiring
 npm install                 # postinstall: prisma generate
 npm run db:migrate          # migratsiyalarni qo'llash
 npm run db:seed             # boshlang'ich ma'lumotlar (qayta ishga tushirsa ham xavfsiz)
@@ -42,17 +47,39 @@ npm run start:dev
 ```
 
 Seed `admin` foydalanuvchisini yaratadi, paroli — `.env` dagi `SEED_ADMIN_PASSWORD`.
+`JWT_SECRET` yo'q yoki 32 belgidan qisqa bo'lsa, server ishga tushmaydi.
+
+## API: auth va foydalanuvchilar
+
+Hamma endpointlar `/api` prefiksi bilan va token talab qiladi (`Authorization: Bearer <token>`), faqat login ochiq.
+Xato javobi doim: `{ "code": "...", "message": "...", "details"?: ... }`.
+
+| Metod | Yo'l | Rol |
+|---|---|---|
+| POST | `/auth/login` | ochiq (IP bo'yicha daqiqasiga 5 urinish, keyin 429 `TOO_MANY_ATTEMPTS`) |
+| GET | `/auth/me` | har kim |
+| POST | `/auth/change-password` | har kim |
+| GET, POST | `/users` | ADMIN |
+| GET, PATCH | `/users/:id` | ADMIN |
+| POST | `/users/:id/reset-password` | ADMIN |
+| GET | `/roles` | ADMIN |
+| GET | `/audit-logs` | ADMIN, APPROVER |
+
+```bash
+curl -s -X POST localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<SEED_ADMIN_PASSWORD>"}'
+```
 
 ## Tekshiruvlar
 
 ```bash
-npm test                # hisoblash yadrosi testlari (bazasiz)
+npm test                # unit testlar (bazasiz): yadro, guard'lar, sxemalar, audit
 npm run typecheck       # TypeScript
-npm run test:db         # DB cheklovlari — Docker'dagi bazada (alohida elma_payroll_test)
+npm run test:db         # DB cheklovlari + E2E — Docker'dagi alohida test bazalarida
 npm run db:check-drift  # schema.prisma va baza bir xilmi — "No difference detected" bo'lishi shart
 ```
 
-`test:db` har safar `elma_payroll_test` bazasini noldan yaratadi — asosiy `elma_payroll` ga tegmaydi.
+`test:db` har safar `elma_payroll_test` (rollback testlari) va `elma_payroll_test_e2e` (HTTP testlari) bazalarini noldan yaratadi — asosiy `elma_payroll` ga tegmaydi.
 
 ## Sxemani o'zgartirish
 

@@ -9,7 +9,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | 1 | Hisoblash yadrosi (STEP, LINEAR, %, dona uchun, depozit, net) + `test_cases.json` | ✅ |
 | 1.1 | Yadroni yangi qarorlarga moslash (`docs/DECISIONS.md` 1–3) | ✅ |
 | 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ✅ |
-| 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ⏳ |
+| 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ✅ |
 | 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ⏳ |
 | 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ⏳ |
 | 6 | Plan: qo'lda va Excel'dan | ⏳ |
@@ -59,3 +59,29 @@ Manba: `docs/ERD_v2.dbml` (41 jadval). Undan chetga chiqilmaydi.
 7. `backend/.env.example`; `.env` gitignore'da.
 8. DB testlari (`npm run test:db`, alohida jest config): har bir muhim cheklov haqiqatan ishlashini tekshiradi (ikkinchi ACTIVE batch, ustma-ust tarix, audit_logs'ni o'chirish, manfiy jarima, noto'g'ri status ...). `npm test` avvalgidek DB'siz qoladi.
 9. `README.md` ni yangila (ishga tushirish: `docker compose up -d`, migratsiya, seed). `*.tsbuildinfo` ni `.gitignore` ga qo'sh va git'dan chiqar.
+
+---
+
+## 3-bosqich — Auth, rollar, audit ✅
+
+Natija: `npm test` 138/138, `npm run typecheck` xatosiz, `npm run test:db` 55/55 (shundan E2E 25), `npm run db:check-drift` — "No difference detected".
+
+Tasdiqlangan qarorlar (2026-10-01):
+- Token 8 soat (`JWT_EXPIRES_IN`), refresh token yo'q. `JWT_SECRET` < 32 belgi → server ishga tushmaydi.
+- ADMIN faqat foydalanuvchilar/sozlamalar/auditni boshqaradi; hisoblash va tasdiqlash uchun alohida rol kerak.
+- Login urinishlari auditga (`LOGIN_SUCCESS`, `LOGIN_FAILED` + sabab: `UNKNOWN_USER` / `WRONG_PASSWORD` / `USER_INACTIVE`).
+- `/auth/login`: IP bo'yicha daqiqasiga 5 urinish (`@nestjs/throttler`), oshsa 429 `TOO_MANY_ATTEMPTS`.
+- Foydalanuvchi topilmasa ham `argon2.verify` soxta xesh bilan chaqiriladi (javob vaqti teng).
+- Auditni ADMIN va APPROVER ko'radi. Oxirgi faol ADMIN'ni bloklash/ADMIN rolini olish — 409 `LAST_ADMIN`.
+- Parol: 8–128 belgi.
+
+Amalga oshirildi:
+1. `src/common/`: `AppError` + global `AllExceptionsFilter` — javob doim `{ code, message, details? }`; `ZodValidationPipe`, `idParamSchema`.
+2. `src/auth/`: global `JwtAuthGuard` (token → foydalanuvchi va rollar har so'rovda bazadan; bloklansa/rol olinsa darhol kuchga kiradi) va `RolesGuard`; `@Public()`, `@Roles()`, `@CurrentUser()`; `LoginThrottlerGuard`.
+3. `src/users/`: CRUD (o'chirish yo'q — bloklash), `reset-password`, `/roles`. Xodimga bog'lash faqat `employeeCode` orqali. LAST_ADMIN tekshiruvi faol adminlarni `FOR UPDATE` bilan qulflab bajariladi.
+4. `src/audit/`: `AuditService.log(tx, ...)` — asosiy o'zgarish bilan bitta tranzaksiyada; `sanitizeForAudit` parol/token maydonlarini olib tashlaydi, BigInt/Decimal/Date → satr. `GET /audit-logs` filtrlar va sahifalash bilan.
+5. E2E testlar alohida `elma_payroll_test_e2e` bazasida (audit_logs o'chirilmagani uchun rollback testlariga ta'sir qilmasligi kerak).
+6. `@nestjs/jwt` 11 (12-versiya faqat ESM — Jest/CommonJS bilan ishlamaydi).
+7. `tsconfig.build.json`: `incremental: false` — eski `.tsbuildinfo` sababli `nest build` ba'zi `.js` fayllarni chiqarmay qo'yayotgan edi.
+
+Ma'lum cheklov: parol almashtirilsa yoki tiklansa, avval berilgan token muddati tugaguncha (≤ 8 soat) amal qiladi — ERD'da token versiyasi ustuni yo'q. Bloklash esa darhol ishlaydi.
