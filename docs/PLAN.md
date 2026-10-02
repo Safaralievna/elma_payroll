@@ -10,7 +10,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | 1.1 | Yadroni yangi qarorlarga moslash (`docs/DECISIONS.md` 1–3) | ✅ |
 | 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ✅ |
 | 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ✅ |
-| 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ⏳ |
+| 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ✅ |
 | 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ⏳ |
 | 6 | Plan: qo'lda va Excel'dan | ⏳ |
 | 7 | Savdo importi: validatsiya, versiyalar, file_hash, OPEN/CLOSED rejimlari, "nima o'zgardi", o'tgan oy qaytarishlari | ⏳ |
@@ -85,3 +85,19 @@ Amalga oshirildi:
 7. `tsconfig.build.json`: `incremental: false` — eski `.tsbuildinfo` sababli `nest build` ba'zi `.js` fayllarni chiqarmay qo'yayotgan edi.
 
 8. Token parol bilan bog'langan (2026-10-02): JWT payload'ida `pwd` — `sha256(passwordHash)` ning birinchi 16 belgisi (`src/auth/password-fingerprint.ts`). `JwtAuthGuard` bazadagi joriy xeshdan izni hisoblab solishtiradi; mos kelmasa (yoki `pwd` yo'q bo'lsa) — 401 `UNAUTHORIZED`. Parol almashtirilsa (`change-password`) yoki tiklansa (`reset-password`), eski tokenlar darhol ishlamaydi — o'z parolini almashtirgan foydalanuvchi ham qaytadan login qiladi. ERD o'zgarmadi (alohida token versiyasi ustuni kerak bo'lmadi). Bloklash ham darhol ishlaydi.
+
+---
+
+## 4-bosqich — Ma'lumotnomalar, xodimlar, tarix, team_links, import ✅
+
+Natija: `npm test` 205/205, `npm run typecheck` xatosiz, `npm run test:db` 90/90 (shundan 4-bosqich E2E 35), `npm run db:check-drift` — "No difference detected".
+Tasdiqlangan qarorlar — `docs/DECISIONS.md` 4.0 va 4.0.1; ochiq savol (oy o'rtasidagi fiks oylik) — 7-bo'lim.
+
+1. **Ma'lumotnomalar** (`src/reference/`): departments, positions (`depositPercent`), product-groups, products, client-categories, clients, price-types — bitta konfiguratsiya (`reference.resources.ts`) + umumiy servis/kontroller. GET (filtr `search`, `isActive`, sahifalash), POST, PATCH; DELETE yo'q. API'da `code` majburiy (importlar kod bo'yicha bog'laydi). Ota yozuv yo'q — 404 `REFERENCE_NOT_FOUND`, nofaol — 409 `REFERENCE_INACTIVE`, band kod — 409 `CODE_TAKEN`.
+2. **Tarix qoidalari** (`src/history/history-rules.ts`) — toza funksiyalar: `planAppend`, `planUpdateLast`, `planDeleteLast`, `planTermination`. Xatolar: `START_NOT_MONTH_START`, `INVALID_DATE_RANGE` (400); `HISTORY_ORDER`, `NOT_LAST_RECORD`, `PERIOD_CLOSED`, `NO_CHANGE` (409). Oxirgi CLOSED davr — `history-db.ts: lastClosedDay`.
+3. **Xodimlar** (`src/employees/`): `/employees/:code` (biznes kodi), `?date=` bo'yicha joriy lavozim va oylik; `/employees/:code/assignments` va `/salaries` (GET, POST, PATCH/DELETE oxirgisiga). Ishdan ketish sanasi ochiq lavozim/maosh/team_links'ni yopadi va `isActive=false`. Har bir amal xodim qatorini `FOR UPDATE` bilan qulflab, tranzaksiyada, audit bilan.
+4. **team_links** (`src/team-links/`): `/team-links` (filtr `leaderCode`, `memberCode`, `linkType`, `date`), tarix a'zo + tur bo'yicha.
+5. **Import** (`src/imports/`): `POST /imports/{employees|team-links|products|clients}` (multipart, `file`), `GET /imports`, `/imports/:id`, `/imports/:id/errors`, `/imports/templates/:type`. Qatorlar avval xotirada rejalashtiriladi (`plans/*.ts`, toza), so'ng hammasi to'g'ri bo'lsa bitta tranzaksiyada yoziladi. Xato bo'lsa — batch INVALID, 422 `IMPORT_HAS_ERRORS`. 50 000 qatorli to'g'ri fayl ~20 soniya.
+6. EXCLUDE buzilishi (Postgres `23P01`, Prisma 7 da `P2039` ichida) — 409 `HISTORY_OVERLAP`; katta fayl — 413 `PAYLOAD_TOO_LARGE`.
+7. Audit amallari: `REFERENCE_CREATE/UPDATE`, `EMPLOYEE_CREATE/UPDATE`, `HISTORY_CREATE/UPDATE/DELETE`, `IMPORT_APPLY`, `IMPORT_INVALID`; `entity_type` — jadval nomi.
+8. Yangi paketlar: `exceljs`, `@types/multer` (dev).

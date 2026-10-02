@@ -9,6 +9,7 @@ const CODE_BY_STATUS: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
   [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
   [HttpStatus.CONFLICT]: 'CONFLICT',
+  [HttpStatus.PAYLOAD_TOO_LARGE]: 'PAYLOAD_TOO_LARGE',
   [HttpStatus.TOO_MANY_REQUESTS]: 'TOO_MANY_ATTEMPTS',
 };
 
@@ -46,10 +47,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // Tarixiy yozuvlar ustma-ust tushdi (EXCLUDE USING gist). Servis buni oldindan
+    // tekshiradi; bu — bir vaqtdagi ikki so'rov holati. Prisma 7 + pg adapter:
+    // asl Postgres kodi meta.driverAdapterError.cause.originalCode da.
+    if (exception instanceof Prisma.PrismaClientKnownRequestError && postgresCode(exception) === '23P01') {
+      return {
+        status: HttpStatus.CONFLICT,
+        body: { code: 'HISTORY_OVERLAP', message: "Tarixiy yozuvlar sanalari ustma-ust tushadi" },
+      };
+    }
+
     this.logger.error(exception instanceof Error ? exception.stack ?? exception.message : String(exception));
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: { code: 'INTERNAL_ERROR', message: 'Ichki server xatosi' },
     };
   }
+}
+
+function postgresCode(error: Prisma.PrismaClientKnownRequestError): string | undefined {
+  const meta = error.meta as { driverAdapterError?: { cause?: { originalCode?: string } } } | undefined;
+  return meta?.driverAdapterError?.cause?.originalCode;
 }

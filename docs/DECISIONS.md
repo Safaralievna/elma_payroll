@@ -106,6 +106,27 @@ Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depoz
 - `kpi_plans.import_batch_id` — nullable (qo'lda kiritilsa NULL).
 - Ma'lumotnomalar (mahsulot, mijoz, narx turi) savdo importidan oldin tizimda bo'lishi kerak.
 
+### 4.0 Ma'lumotnoma importlari (team lead tasdiqladi, 2026-10-02)
+
+- Turlar: `EMPLOYEES`, `TEAM_LINKS`, `PRODUCTS`, `CLIENTS`. Davrga bog'lanmaydi (`period_id = NULL`).
+- Faylda ko'pi bilan **50 000** ma'lumot qatori; oshsa — 400 `INVALID_FILE` (batch yaratilmaydi).
+- Import faqat qo'shadi yoki yangilaydi: faylda yo'q yozuvga tegilmaydi, bo'sh katakcha mavjud qiymatni o'chirmaydi.
+- Xato deb topilgan (INVALID) faylni o'zgartirmasdan qayta yuklash — 409 `FILE_ALREADY_IMPORTED`, xabarda "avval xato deb topilgan, batch #N".
+- Ustunlar (sarlavha 1-qatorda, tartib muhim emas, noma'lum ustun — xato):
+  - EMPLOYEES: `xodim_kodi`, `familiya`, `ism`, `otasining_ismi`, `ishga_kirgan_sana`, `ishdan_ketgan_sana`, `bolim_kodi`, `lavozim_kodi`, `lavozim_sanasi`, `oylik`, `oylik_sanasi`.
+  - TEAM_LINKS: `rahbar_kodi`, `xodim_kodi`, `turi` (SUPERVISOR/OPERATOR), `boshlanish_sanasi`, `tugash_sanasi`.
+  - PRODUCTS: `mahsulot_kodi`, `nomi`, `guruh_kodi`. CLIENTS: `mijoz_kodi`, `nomi`, `kategoriya_kodi`.
+
+### 4.0.1 Xodimlar va tarixiy yozuvlar (team lead tasdiqladi, 2026-10-02)
+
+- Ma'lumotnomalar va xodimlarni **CALCULATOR** yozadi; o'qish — hamma rol.
+- Maosh (`employee_salary_history`) va lavozim (`employee_assignments`) `start_date` — **faqat oyning 1-kuni** (aks holda 400 `START_NOT_MONTH_START`). `team_links` — istalgan kun.
+- Yangi yozuv oldingi ochiq yozuvni bir kun oldin yopadi (`end_date` ham davrga kiradi). Faqat oxiriga qo'shiladi; tuzatish va o'chirish — faqat oxirgi yozuvga.
+- Oxirgi CLOSED davr oxirigacha bo'lgan kunlarga ta'sir qiladigan tarix o'zgarishi — 409 `PERIOD_CLOSED`.
+- `ishdan_ketgan_sana` kiritilsa: shu sanada ochiq lavozim, maosh va `team_links` (rahbar sifatida ham, a'zo sifatida ham) yopiladi, `isActive = false` — bitta tranzaksiyada, audit bilan.
+- SUPERVISOR/OPERATOR havolasida rahbarning lavozimi tekshirilmaydi.
+- **Savdo importida (7-bosqich)** xodimning `isActive` emas, **sotuv kunida ishlagani** tekshiriladi: ishdan ketgan xodimning oxirgi oy savdosi qabul qilinadi.
+
 ### 4.1 Qaytarishlar
 
 - Faqat `sales_lines` da manfiy summa va dona ruxsat etiladi (boshqa pul jadvallarida ≥ 0).
@@ -152,7 +173,11 @@ Migratsiyadagi cheklovlar:
 - `audit_logs` — UPDATE/DELETE'ni to'suvchi trigger.
 - Hamma `created_at` — `NOT NULL DEFAULT now()`.
 
-## 7. MVP chegarasi
+## 7. Ochiq savollar
+
+- **Oy o'rtasida ishga kirgan/ketgan xodimning fiks oyligi kunlarga bo'linadimi?** — 8-bosqichdan oldin team leaddan so'raladi. (Maosh o'zgarishi faqat oyning 1-kunidan, lekin ishga kirish/ketish sanasi istalgan kun.)
+
+## 8. MVP chegarasi
 
 **MVP'ga kiradi:** ma'lumotnomalar, xodimlar, team_links (Excel + qo'lda); KPI konstruktor; plan (qo'lda / Excel); savdo importi (OPEN almashtirish, CLOSED solishtirish, "nima o'zgardi"); hisoblash + payroll (bonus, jarima, avans, depozit yig'ish va yechish, qarzni o'tkazish); davr OPEN → REVIEW → CLOSED; rollar admin/hisoblovchi/tasdiqlovchi + audit; Vedomost (Excel), karta/naqd, Talabnoma.
 

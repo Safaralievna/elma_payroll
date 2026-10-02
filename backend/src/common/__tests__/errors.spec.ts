@@ -1,4 +1,11 @@
-import { ArgumentsHost, ForbiddenException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  ForbiddenException,
+  HttpStatus,
+  Logger,
+  NotFoundException,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { Prisma } from '../../generated/prisma/client';
 import { AppError } from '../app-error';
@@ -52,6 +59,22 @@ describe('AllExceptionsFilter — javob doim { code, message, details? }', () =>
       clientVersion: 'test',
     });
     expect(runFilter(error)).toMatchObject({ status: 409, body: { code: 'CONFLICT' } });
+  });
+
+  it('Tarixiy yozuvlar ustma-ust (EXCLUDE, Postgres 23P01) — 409 HISTORY_OVERLAP', () => {
+    const error = new Prisma.PrismaClientKnownRequestError('Exclusion constraint', {
+      code: 'P2039',
+      clientVersion: 'test',
+      meta: { driverAdapterError: { cause: { originalCode: '23P01', constraint: 'x' } } },
+    });
+    expect(runFilter(error)).toMatchObject({ status: 409, body: { code: 'HISTORY_OVERLAP' } });
+  });
+
+  it('Juda katta so\'rov/fayl (413) — PAYLOAD_TOO_LARGE', () => {
+    expect(runFilter(new PayloadTooLargeException('File too large'))).toMatchObject({
+      status: 413,
+      body: { code: 'PAYLOAD_TOO_LARGE' },
+    });
   });
 
   it('Kutilmagan xato — 500 INTERNAL_ERROR, ichki tafsilot tashqariga chiqmaydi, lekin log yoziladi', () => {

@@ -20,6 +20,21 @@ export type ErrorCode =
   | 'LAST_ADMIN'
   | 'TOO_MANY_ATTEMPTS'
   | 'INVALID_CONFIGURATION'
+  // 4-bosqich: ma'lumotnomalar, xodimlar, tarix, import
+  | 'CODE_TAKEN'
+  | 'REFERENCE_NOT_FOUND'
+  | 'REFERENCE_INACTIVE'
+  | 'START_NOT_MONTH_START'
+  | 'HISTORY_ORDER'
+  | 'HISTORY_OVERLAP'
+  | 'INVALID_DATE_RANGE'
+  | 'NOT_LAST_RECORD'
+  | 'PERIOD_CLOSED'
+  | 'NO_CHANGE'
+  | 'INVALID_FILE'
+  | 'FILE_ALREADY_IMPORTED'
+  | 'IMPORT_HAS_ERRORS'
+  | 'PAYLOAD_TOO_LARGE'
   | 'HTTP_ERROR'
   | 'INTERNAL_ERROR';
 

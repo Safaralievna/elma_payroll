@@ -60,6 +60,22 @@ export class AuditService {
     });
   }
 
+  /** Ko'p yozuv (masalan, import) — bitta so'rovda, shu tranzaksiyada. */
+  async logMany(db: Prisma.TransactionClient, entries: readonly AuditEntry[]): Promise<void> {
+    for (let start = 0; start < entries.length; start += AUDIT_CHUNK) {
+      await db.auditLog.createMany({
+        data: entries.slice(start, start + AUDIT_CHUNK).map((entry) => ({
+          userId: entry.userId,
+          action: entry.action,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          oldData: toJsonColumn(entry.oldData),
+          newData: toJsonColumn(entry.newData),
+        })),
+      });
+    }
+  }
+
   async list(query: AuditQuery): Promise<AuditPage> {
     const where: Prisma.AuditLogWhereInput = {
       entityType: query.entityType,
@@ -97,6 +113,8 @@ export class AuditService {
     };
   }
 }
+
+const AUDIT_CHUNK = 1000;
 
 /** Ma'lumot yo'q bo'lsa — ustun NULL bo'lib qoladi. */
 function toJsonColumn(value: unknown): Prisma.InputJsonValue | undefined {

@@ -65,6 +65,21 @@ Xato javobi doim: `{ "code": "...", "message": "...", "details"?: ... }`.
 | GET | `/roles` | ADMIN |
 | GET | `/audit-logs` | ADMIN, APPROVER |
 
+## API: ma'lumotnomalar, xodimlar, import (4-bosqich)
+
+O'qish — hamma rol, yozish — CALCULATOR. O'chirish yo'q (`isActive=false`), faqat oxirgi tarixiy yozuvni tuzatish/o'chirish mumkin.
+
+| Metod | Yo'l |
+|---|---|
+| GET, POST / GET, PATCH `:id` | `/departments`, `/positions`, `/product-groups`, `/products`, `/client-categories`, `/clients`, `/price-types` |
+| GET, POST / GET, PATCH `:code` | `/employees` (`?date=` — shu sanadagi lavozim va oylik) |
+| GET, POST / PATCH, DELETE `:id` | `/employees/:code/assignments`, `/employees/:code/salaries` |
+| GET, POST / PATCH, DELETE `:id` | `/team-links` |
+| POST | `/imports/employees`, `/imports/team-links`, `/imports/products`, `/imports/clients` (multipart, maydon `file`, `.xlsx`) |
+| GET | `/imports`, `/imports/:id`, `/imports/:id/errors`, `/imports/templates/:type` |
+
+Excel ustunlari — `docs/DECISIONS.md` 4.0; bo'sh shablon — `/imports/templates/:type`.
+
 ```bash
 curl -s -X POST localhost:3000/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"<SEED_ADMIN_PASSWORD>"}'
@@ -73,7 +88,7 @@ curl -s -X POST localhost:3000/api/auth/login -H 'Content-Type: application/json
 ## Tekshiruvlar
 
 ```bash
-npm test                # unit testlar (bazasiz): yadro, guard'lar, sxemalar, audit
+npm test                # unit testlar (bazasiz): yadro, tarix qoidalari, Excel/import rejasi, guard'lar, audit
 npm run typecheck       # TypeScript
 npm run test:db         # DB cheklovlari + E2E — Docker'dagi alohida test bazalarida
 npm run db:check-drift  # schema.prisma va baza bir xilmi — "No difference detected" bo'lishi shart
