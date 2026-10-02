@@ -22,7 +22,7 @@ import { EMPLOYEES_IMPORT } from './kinds/employees.import';
 import { TEAM_LINKS_IMPORT } from './kinds/team-links.import';
 import { Outcome, RowOutcome } from './plans/tracked-history';
 
-const KINDS: Record<ImportPath, ImportKind> = {
+export const KINDS: Record<ImportPath, ImportKind> = {
   employees: EMPLOYEES_IMPORT,
   'team-links': TEAM_LINKS_IMPORT,
   products: PRODUCTS_IMPORT,
