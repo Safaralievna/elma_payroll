@@ -19,6 +19,12 @@ export const AUDIT_ACTIONS = [
   'HISTORY_DELETE',
   'IMPORT_APPLY',
   'IMPORT_INVALID',
+  // 5-bosqich. position_kpis va employee_kpi_overrides — HISTORY_* (entity_type = jadval nomi).
+  'KPI_CREATE',
+  'KPI_UPDATE',
+  'KPI_RULE_CREATE',
+  'KPI_RULE_UPDATE',
+  'KPI_RULE_DELETE',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

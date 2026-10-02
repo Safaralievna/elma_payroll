@@ -35,6 +35,10 @@ export type ErrorCode =
   | 'FILE_ALREADY_IMPORTED'
   | 'IMPORT_HAS_ERRORS'
   | 'PAYLOAD_TOO_LARGE'
+  // 5-bosqich: KPI konstruktor
+  | 'END_NOT_MONTH_END'
+  | 'KPI_IN_USE'
+  | 'RULE_IN_USE'
   | 'HTTP_ERROR'
   | 'INTERNAL_ERROR';
 

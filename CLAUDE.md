@@ -44,6 +44,7 @@ Baza sxemasi: **`docs/ERD_v2.dbml`** — jadvallar, ustunlar va cheklovlar uchun
 - Avval test, keyin kod (ayniqsa hisob-kitobda). Har bosqich oxirida: `npm test` va `npm run typecheck` xatosiz o'tishi shart.
 - Mavjud testlarni "o'tishi uchun" o'zgartirma — faqat `docs/DECISIONS.md` dagi qaror shuni talab qilsa.
 - Bosqich tugagach: `docs/PLAN.md` da holatni yangila va foydalanuvchiga qisqa xulosa ber (nima qilindi, qanday tekshirish mumkin). Git commit'ni foydalanuvchi so'raganda qil.
+- Commit faqat `npm test`, `npm run typecheck` va `npm run test:db` hammasi o'tgandan keyin qilinadi. Bittasi yiqilsa — commit qilma, avval tuzat.
 
 ## Buyruqlar
 

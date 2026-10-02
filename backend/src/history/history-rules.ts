@@ -32,6 +32,8 @@ export interface HistoryRules {
 
 export type HistoryErrorCode =
   | 'START_NOT_MONTH_START'
+  | 'END_NOT_MONTH_END'
+  | 'HISTORY_OVERLAP'
   | 'HISTORY_ORDER'
   | 'PERIOD_CLOSED'
   | 'INVALID_DATE_RANGE'

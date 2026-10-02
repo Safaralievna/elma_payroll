@@ -39,6 +39,8 @@ Manba: TZ, Excel, taqdimot, tasdiqlangan ERD/flowchart, `test_cases.json`, team 
 - `kpi_facts` — KPI darajasida bitta yozuv, unique `(period_id, employee_id, kpi_id)`.
 - Filtr qiymatlari (`kpi_rule_filters.values`) — ID'lar (kodlar emas). (texnik qaror)
 - Bitta KPI ichida ikki qoidaning `priority` qiymati bir xil bo'lsa (yoki qoida takrorlansa) — **validatsiya xatosi** (`INVALID_CONFIGURATION`): qaysi qoida birinchi ekani noaniq bo'lib qoladi. (team lead tasdiqladi, 2026-10-01)
+- **Plan ishlatadigan turlar** — STEP, LINEAR va `min_achievement`'li FIXED — hamda MANUAL: KPI'da **faqat bitta faol qoida**. Sabab: plan, baza summa va qo'lda kiritilgan summa KPI uchun bitta (`kpi_plans`), ikkita qoida bo'lsa baza ikki marta to'lanadi. Bir nechta qoida faqat plansiz turlarda: RESULT_PERCENTAGE, PER_UNIT, shartsiz FIXED. Shuning uchun Excel'dagi Savdo vakili qatorlari — har biri **alohida KPI**; Ekspeditor = 2 ta KPI: "Savdodan %" (RESULT_PERCENTAGE, 3 qoida) va "Logo salfetka" (PER_UNIT). (team lead tasdiqladi, 2026-10-02)
+- Oldida **filtrsiz faol qoida** turgan faol qoida hech qachon ishlamaydi (hamma qator birinchisiga tushadi) — `INVALID_CONFIGURATION`. (team lead tasdiqladi, 2026-10-02)
 
 ### 2.3 Fakt va aggregation
 
@@ -54,6 +56,14 @@ Manba: TZ, Excel, taqdimot, tasdiqlangan ERD/flowchart, `test_cases.json`, team 
 - KPI'da `scope = TEAM` bo'lsa, qaysi havola turi ishlatilishi `kpi_definitions.team_link_type` da saqlanadi (texnik qaror).
 - Savdo qatori **savdo kunidagi** (`sale_date`) rahbar jamoasiga yoziladi.
 - Rahbarning o'z savdosi TEAM faktiga kirmaydi.
+
+### 2.5 KPI konstruktor (team lead tasdiqladi, 2026-10-02)
+
+- KPI, qoidalar, `kpi_units`, lavozimga biriktirish va override'larni **CALCULATOR** yozadi; o'qish — hamma rol.
+- `position_kpis` va `employee_kpi_overrides`: `start_date` — oyning 1-kuni, `end_date` — oyning oxirgi kuni yoki bo'sh. KPI oyni yo butunlay qamraydi, yo umuman qamramaydi.
+- Xodimning oydagi KPI'lari = (shu oydagi lavozim(lar)ning KPI'lari ∪ ADD) − REMOVE.
+- `kpi_results` da natijasi bor KPI'ning hisoblash turi, aggregation, source_field, scope (team_link_type bilan) va fact_source'i o'zgartirilmaydi — `KPI_IN_USE`, o'rniga yangi KPI yaratiladi. Qoida parametrlari (pog'onalar, foizlar, filtrlar) o'zgartiriladi va joriy OPEN davrning butun oyiga ta'sir qiladi; yopilgan oylar `kpi_results` da o'zgarmaydi. Qoidalar versiyasi — MVP'dan keyin.
+- `fact_source`: hozircha faqat `EXCEL` va `MANUAL` (Smartup API MVP'da yo'q).
 
 ## 3. Ish haqi (payroll)
 

@@ -32,6 +32,8 @@ export function toHistoryRecord(
 
 const STATUS_BY_CODE: Record<HistoryErrorCode, HttpStatus> = {
   START_NOT_MONTH_START: HttpStatus.BAD_REQUEST,
+  END_NOT_MONTH_END: HttpStatus.BAD_REQUEST,
+  HISTORY_OVERLAP: HttpStatus.CONFLICT,
   INVALID_DATE_RANGE: HttpStatus.BAD_REQUEST,
   HISTORY_ORDER: HttpStatus.CONFLICT,
   PERIOD_CLOSED: HttpStatus.CONFLICT,

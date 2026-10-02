@@ -11,7 +11,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | 2 | ERD v2 → Prisma sxemasi, Docker'da PostgreSQL, migratsiya + qo'lda SQL cheklovlar, seed | ✅ |
 | 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ✅ |
 | 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ✅ |
-| 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ⏳ |
+| 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ✅ |
 | 6 | Plan: qo'lda va Excel'dan | ⏳ |
 | 7 | Savdo importi: validatsiya, versiyalar, file_hash, OPEN/CLOSED rejimlari, "nima o'zgardi", o'tgan oy qaytarishlari | ⏳ |
 | 8 | Hisoblash servisi: faktlar → KPI natijalari → payroll (bonus, jarima, avans, depozit, qarz, qayta hisob) | ⏳ |
@@ -101,3 +101,18 @@ Tasdiqlangan qarorlar — `docs/DECISIONS.md` 4.0 va 4.0.1; ochiq savol (oy o'rt
 6. EXCLUDE buzilishi (Postgres `23P01`, Prisma 7 da `P2039` ichida) — 409 `HISTORY_OVERLAP`; katta fayl — 413 `PAYLOAD_TOO_LARGE`.
 7. Audit amallari: `REFERENCE_CREATE/UPDATE`, `EMPLOYEE_CREATE/UPDATE`, `HISTORY_CREATE/UPDATE/DELETE`, `IMPORT_APPLY`, `IMPORT_INVALID`; `entity_type` — jadval nomi.
 8. Yangi paketlar: `exceljs`, `@types/multer` (dev).
+
+---
+
+## 5-bosqich — KPI konstruktor ✅
+
+Natija: `npm test` 282/282, `npm run typecheck` xatosiz, `npm run test:db` 120/120 (shundan 5-bosqich E2E 21), `npm run db:check-drift` — "No difference detected". Migratsiya yo'q (ERD o'zgarmadi, faqat `kpi_units` izohi).
+Tasdiqlangan qarorlar — `docs/DECISIONS.md` 2.2 (plan turlarida bitta faol qoida, filtrsiz qoidadan keyingi qoida — xato) va 2.5.
+
+1. **Konfiguratsiya tekshiruvi** (`src/kpis/kpi-config.ts`, toza): `validateKpiConfig(kpi, rules)` hamma xatolarni `{path, message}` ro'yxati qilib qaytaradi → 400 `INVALID_CONFIGURATION`. KPI: hisoblash turi, scope ↔ team_link_type, fact_source (EXCEL/MANUAL), aggregation + source_field (SUM — amount/quantity, COUNT* — ID maydonlar). Qoida: tur bo'yicha configuration kalitlari (noma'lum kalit — xato, qiymat ≥ 0), STEP pog'onalari, filtrlar (ID maydonlarda `= != IN NOT_IN` va faqat ID; amount/quantity'da `> >= < <=`), priority, faol qoidalar soni, ishlamaydigan qoida. Filtrdagi ID bazada bor va faol — servisda (`kpi-references.ts`).
+2. **Amaldagi KPI'lar** (`src/kpis/effective-kpis.ts`, toza): `resolveEmployeeKpis` — (oydagi lavozim KPI'lari ∪ ADD) − REMOVE, manbasi (POSITION/ADD) va olib tashlanganlar bilan. 8-bosqich shuni chaqiradi.
+3. **Biriktirish sanalari** (`src/kpis/kpi-dates.ts`, toza): start — oy boshi, end — oy oxiri yoki bo'sh (`END_NOT_MONTH_END`), ustma-ust — 409 `HISTORY_OVERLAP`, yopilgan davr — 409 `PERIOD_CLOSED`.
+4. **Endpointlar** (o'qish — hamma rol, yozish — CALCULATOR): `/kpi-units` (ma'lumotnoma); `GET /kpis` (`search`, `isActive`, `calculationType`), `GET/PATCH /kpis/:code`, `POST /kpis` (qoidalari bilan birga); `POST /kpis/:code/rules`, `PUT/DELETE /kpis/:code/rules/:ruleId`; `GET/POST /position-kpis`, `PATCH/DELETE /position-kpis/:id`; `GET/POST /employees/:code/kpi-overrides`, `PATCH/DELETE .../:id`; `GET /employees/:code/kpis?year=&month=`.
+5. Natijasi bor KPI'ning tuzilmasi o'zgarmaydi va ochiq biriktirishi bor KPI nofaol qilinmaydi — 409 `KPI_IN_USE`; natijasi bor qoida o'chirilmaydi — 409 `RULE_IN_USE`. Har bir yozish KPI qatorini `FOR UPDATE` bilan qulflab, tranzaksiyada.
+6. Audit amallari: `KPI_CREATE`, `KPI_UPDATE`, `KPI_RULE_CREATE/UPDATE/DELETE`; biriktirish va override — `HISTORY_*` (`entity_type` = `position_kpis` / `employee_kpi_overrides`); birliklar — `REFERENCE_*`.
+7. Testlar: `src/kpis/__tests__/` — validatsiya, resolver, sanalar va Excel tuzilishiga moslik (Savdo vakili qatorlari — alohida STEP KPI'lar, jami 2 325 297; Ekspeditor — "Savdodan %" 4 100 000 va "Logo salfetka" 5 000 000); `test/db/kpis.db-spec.ts` — E2E.

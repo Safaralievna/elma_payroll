@@ -177,7 +177,7 @@ Table kpi_units {
   code varchar(30) [not null, unique]
   description varchar(255)
 
-  // Masalan: UZS, DONA, AKB, SOAT, KUN. Admin yangisini qo'sha oladi.
+  // Masalan: UZS, DONA, AKB, SOAT, KUN. Hisobchi (CALCULATOR) yangisini qo'sha oladi (DECISIONS 2.5).
 
   is_active boolean [not null, default: true]
 }

@@ -3,7 +3,7 @@ import { codeSchema, idSchema } from '../common/schemas';
 import { Prisma } from '../generated/prisma/client';
 
 /**
- * Ma'lumotnomalar: 7 ta jadval bir xil shaklda (kod, nom, isActive) va bir xil
+ * Ma'lumotnomalar: 8 ta jadval bir xil shaklda (kod, nom, isActive) va bir xil
  * qoidalar bilan ishlaydi. Har biri uchun alohida modul yozish o'rniga — shu
  * konfiguratsiya va bitta umumiy servis/kontroller (reference.service.ts).
  */
@@ -167,5 +167,15 @@ export const REFERENCE_RESOURCES: ReferenceResource[] = [
     delegate: (db) => asDelegate(db.priceType),
     ...schemas(100),
     hasTimestamps: false,
+  },
+  {
+    // KPI o'lchov birliklari (UZS, DONA, AKB ...) — DECISIONS 2.5.
+    path: 'kpi-units',
+    table: 'kpi_units',
+    label: "O'lchov birligi",
+    delegate: (db) => asDelegate(db.kpiUnit),
+    ...schemas(100, { code: codeSchema.max(30), description: z.string().trim().max(255).nullable().optional() }),
+    hasTimestamps: false,
+    extraView: (row) => ({ description: row.description ?? null }),
   },
 ];
