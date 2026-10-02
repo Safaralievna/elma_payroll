@@ -1,4 +1,6 @@
 import {
+  assertNotClosed,
+  firstDayAfterEndChange,
   HistoryRecord,
   HistoryRuleError,
   HistoryRules,
@@ -231,5 +233,21 @@ describe('planTermination — ishdan ketish sanasida ochiq yozuvlarni yopish', (
     expectRuleError(() => planTermination([rec(1, '2026-01-01', null)], '2026-03-20', rules), 'PERIOD_CLOSED');
     expect(planTermination([rec(1, '2026-01-01', null)], '2026-03-31', rules)).toEqual([{ id: 1n, endDate: '2026-03-31' }]);
     expect(planTermination([rec(1, '2026-01-01', '2026-02-28')], '2026-03-20', rules)).toEqual([]);
+  });
+});
+
+describe('CLOSED davr himoyasi — umumiy helper (tarix va KPI biriktirishlari)', () => {
+  it("assertNotClosed: ta'sir qiladigan birinchi kun oxirgi CLOSED kunidan keyin bo'lishi kerak", () => {
+    expectRuleError(() => assertNotClosed('2026-02-28', '2026-02-28'), 'PERIOD_CLOSED');
+    expectRuleError(() => assertNotClosed('2025-11-01', '2026-02-28'), 'PERIOD_CLOSED');
+    expect(() => assertNotClosed('2026-03-01', '2026-02-28')).not.toThrow();
+    expect(() => assertNotClosed('2020-01-01', null)).not.toThrow();
+  });
+
+  it('firstDayAfterEndChange: kichikroq (eski yoki yangi) tugash sanasidan keyingi kun', () => {
+    expect(firstDayAfterEndChange(null, '2026-02-28')).toBe('2026-03-01');
+    expect(firstDayAfterEndChange('2026-01-31', null)).toBe('2026-02-01');
+    expect(firstDayAfterEndChange('2026-01-31', '2026-03-31')).toBe('2026-02-01');
+    expect(firstDayAfterEndChange('2026-03-31', '2026-01-31')).toBe('2026-02-01');
   });
 });

@@ -64,7 +64,7 @@ export interface AppendInput {
 }
 
 export function planAppend(records: readonly HistoryRecord[], input: AppendInput, rules: HistoryRules): AppendPlan {
-  checkRange(input.startDate, input.endDate);
+  checkDateOrder(input.startDate, input.endDate);
 
   // Avval "o'zgarmadi" holatlari — eski ma'lumotni qayta import qilish xato bo'lmasin.
   const sameStart = records.find((record) => record.startDate === input.startDate);
@@ -125,16 +125,12 @@ export function planUpdateLast(
   const target = requireLast(records, id);
   const newStart = patch.startDate ?? target.startDate;
   const newEnd = patch.endDate === undefined ? target.endDate : patch.endDate;
-  checkRange(newStart, newEnd);
+  checkDateOrder(newStart, newEnd);
   if (newStart !== target.startDate) checkMonthStart(newStart, rules);
 
   const affected: string[] = [];
   if (newStart !== target.startDate || patch.valueChanged) affected.push(minDate(newStart, target.startDate));
-  if (newEnd !== target.endDate) {
-    // null = cheksiz; o'zgarish kichikroq tugash sanasidan keyingi kundan boshlanadi.
-    const earlierEnd = newEnd === null ? target.endDate : target.endDate === null ? newEnd : minDate(newEnd, target.endDate);
-    affected.push(addDays(earlierEnd as string, 1));
-  }
+  if (newEnd !== target.endDate) affected.push(firstDayAfterEndChange(target.endDate, newEnd));
   if (affected.length === 0) throw new HistoryRuleError('NO_CHANGE', "Hech narsa o'zgarmadi");
   checkNotClosed(affected.reduce(minDate), rules);
 
@@ -213,7 +209,32 @@ function minDate(a: string, b: string): string {
   return a < b ? a : b;
 }
 
-function checkRange(startDate: string, endDate: string | null): void {
+/**
+ * Tugash sanasi o'zgarganda ta'sir qiladigan birinchi kun: kichikroq tugash
+ * sanasidan keyingi kun (null = cheksiz). Masalan, ochiq yozuvni 02-28 da yopish
+ * 03-01 dan boshlab ta'sir qiladi. `oldEnd` va `newEnd` har xil bo'lishi kerak.
+ */
+export function firstDayAfterEndChange(oldEnd: string | null, newEnd: string | null): string {
+  const earlierEnd = newEnd === null ? oldEnd : oldEnd === null ? newEnd : minDate(newEnd, oldEnd);
+  if (earlierEnd === null) throw new Error("Tugash sanasi o'zgarmagan");
+  return addDays(earlierEnd, 1);
+}
+
+/**
+ * CLOSED davr himoyasi (CLAUDE.md 4-qoida): o'zgarish ta'sir qiladigan birinchi kun
+ * oxirgi CLOSED davr oxirgi kunidan keyin bo'lishi kerak. Lavozim, maosh, team_links,
+ * position_kpis va employee_kpi_overrides — hammasi shu tekshiruv bilan.
+ */
+export function assertNotClosed(firstAffectedDay: string, lastClosedDay: string | null): void {
+  if (lastClosedDay !== null && firstAffectedDay <= lastClosedDay) {
+    throw new HistoryRuleError(
+      'PERIOD_CLOSED',
+      `O'zgarish yopilgan davrga (${lastClosedDay} gacha) ta'sir qiladi — tuzatish keyingi ochiq davrda qayta hisob orqali`,
+    );
+  }
+}
+
+export function checkDateOrder(startDate: string, endDate: string | null): void {
   if (endDate !== null && endDate < startDate) {
     throw new HistoryRuleError('INVALID_DATE_RANGE', "Tugash sanasi boshlanish sanasidan oldin bo'lmasligi kerak");
   }
@@ -227,10 +248,5 @@ function checkMonthStart(startDate: string, rules: HistoryRules): void {
 
 /** `firstAffectedDay` — o'zgarish ta'sir qiladigan birinchi kun. */
 function checkNotClosed(firstAffectedDay: string, rules: HistoryRules): void {
-  if (rules.lastClosedDay !== null && firstAffectedDay <= rules.lastClosedDay) {
-    throw new HistoryRuleError(
-      'PERIOD_CLOSED',
-      `O'zgarish yopilgan davrga (${rules.lastClosedDay} gacha) ta'sir qiladi — tuzatish keyingi ochiq davrda qayta hisob orqali`,
-    );
-  }
+  assertNotClosed(firstAffectedDay, rules.lastClosedDay);
 }

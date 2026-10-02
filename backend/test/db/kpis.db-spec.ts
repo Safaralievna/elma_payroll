@@ -508,3 +508,73 @@ describe('Override va amaldagi KPI\'lar — /employees/:code/kpi-overrides, /emp
     await http(approver).get(`/employees/${code}/kpis?year=2026&month=13`).expect(400);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('Yopilgan davr himoyasi — DELETE va PATCH (DECISIONS 2.5, 4-bosqich qoidasi bilan bir xil)', () => {
+  // Bazada 2025-dekabr CLOSED. API yopilgan davrdan boshlanadigan yozuv yaratmaydi —
+  // shuning uchun "eski" yozuv (2025-noyabrdan) to'g'ridan-to'g'ri bazaga qo'yiladi.
+  async function freshPositionAndKpi(): Promise<{ positionId: bigint; kpi: { id: string; code: string } }> {
+    const position = await prisma.position.create({ data: { code: uniqueName('POS'), name: 'Lavozim' } });
+    return { positionId: position.id, kpi: await createKpi(stepKpi()) };
+  }
+
+  const auditCount = (action: 'HISTORY_DELETE' | 'HISTORY_UPDATE', entityType: string, id: bigint | string) =>
+    prisma.auditLog.count({ where: { action, entityType, entityId: BigInt(id) } });
+
+  it('position-kpis: CLOSED davrga tegsa DELETE va PATCH — 409; OPEN oylarda — o\'tadi, audit yoziladi', async () => {
+    const { positionId, kpi } = await freshPositionAndKpi();
+    const old = await prisma.positionKpi.create({
+      data: { positionId, kpiId: BigInt(kpi.id), startDate: new Date('2025-11-01'), endDate: new Date('2026-03-31') },
+    });
+
+    // DELETE: davri (2025-11..2026-03) yopilgan dekabrga tegadi.
+    expect((await http(calc).delete(`/position-kpis/${old.id}`).expect(409)).body.code).toBe('PERIOD_CLOSED');
+    expect(await prisma.positionKpi.count({ where: { id: old.id } })).toBe(1);
+    expect(await auditCount('HISTORY_DELETE', 'position_kpis', old.id)).toBe(0);
+
+    // PATCH: yangi sana yopilgan noyabrda — 409; eski va yangi sana ochiq oylarda — o'tadi.
+    expect((await http(calc).patch(`/position-kpis/${old.id}`, { endDate: '2025-11-30' }).expect(409)).body.code).toBe(
+      'PERIOD_CLOSED',
+    );
+    await http(calc).patch(`/position-kpis/${old.id}`, { endDate: '2026-05-31' }).expect(200);
+    expect(await auditCount('HISTORY_UPDATE', 'position_kpis', old.id)).toBe(1);
+
+    // OPEN: 2026-yildan boshlangan yozuv — PATCH va DELETE o'tadi, DELETE auditga yoziladi.
+    const open = await http(calc)
+      .post('/position-kpis', { positionId: positionId.toString(), kpiId: kpi.id, startDate: '2026-07-01' })
+      .expect(201);
+    await http(calc).patch(`/position-kpis/${open.body.id}`, { endDate: '2026-09-30' }).expect(200);
+    await http(calc).delete(`/position-kpis/${open.body.id}`).expect(204);
+    expect(await auditCount('HISTORY_DELETE', 'position_kpis', open.body.id)).toBe(1);
+  });
+
+  it("kpi-overrides: CLOSED davrga tegsa DELETE va PATCH — 409; OPEN oylarda — o'tadi, audit yoziladi", async () => {
+    const kpi = await createKpi(percentKpi());
+    const code = await newEmployee(salesRep.id);
+    const employee = await prisma.employee.findUniqueOrThrow({ where: { employeeCode: code } });
+    const old = await prisma.employeeKpiOverride.create({
+      data: { employeeId: employee.id, kpiId: BigInt(kpi.id), action: 'ADD', startDate: new Date('2025-11-01') },
+    });
+    const url = `/employees/${code}/kpi-overrides`;
+
+    expect((await http(calc).delete(`${url}/${old.id}`).expect(409)).body.code).toBe('PERIOD_CLOSED');
+    expect(await prisma.employeeKpiOverride.count({ where: { id: old.id } })).toBe(1);
+    expect(await auditCount('HISTORY_DELETE', 'employee_kpi_overrides', old.id)).toBe(0);
+
+    // Ochiq yozuvni dekabr oxirida yopish yopilgan dekabrga tegmaydi (2026-01-01 dan ta'sir qiladi),
+    // noyabr oxirida yopish esa tegadi.
+    expect((await http(calc).patch(`${url}/${old.id}`, { endDate: '2025-11-30' }).expect(409)).body.code).toBe('PERIOD_CLOSED');
+    await http(calc).patch(`${url}/${old.id}`, { endDate: '2026-02-28' }).expect(200);
+    expect(await auditCount('HISTORY_UPDATE', 'employee_kpi_overrides', old.id)).toBe(1);
+
+    const open = await http(calc).post(url, { kpiId: kpi.id, action: 'REMOVE', startDate: '2026-04-01' }).expect(201);
+    await http(calc).patch(`${url}/${open.body.id}`, { endDate: '2026-06-30' }).expect(200);
+    await http(calc).delete(`${url}/${open.body.id}`).expect(204);
+    expect(await prisma.employeeKpiOverride.count({ where: { id: BigInt(open.body.id) } })).toBe(0);
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'HISTORY_DELETE', entityType: 'employee_kpi_overrides', entityId: BigInt(open.body.id) },
+    });
+    expect(audit?.oldData).toMatchObject({ employeeCode: code, kpiCode: kpi.code, action: 'REMOVE', startDate: '2026-04-01' });
+  });
+});

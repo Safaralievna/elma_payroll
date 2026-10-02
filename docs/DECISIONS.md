@@ -62,8 +62,19 @@ Manba: TZ, Excel, taqdimot, tasdiqlangan ERD/flowchart, `test_cases.json`, team 
 - KPI, qoidalar, `kpi_units`, lavozimga biriktirish va override'larni **CALCULATOR** yozadi; o'qish — hamma rol.
 - `position_kpis` va `employee_kpi_overrides`: `start_date` — oyning 1-kuni, `end_date` — oyning oxirgi kuni yoki bo'sh. KPI oyni yo butunlay qamraydi, yo umuman qamramaydi.
 - Xodimning oydagi KPI'lari = (shu oydagi lavozim(lar)ning KPI'lari ∪ ADD) − REMOVE.
-- `kpi_results` da natijasi bor KPI'ning hisoblash turi, aggregation, source_field, scope (team_link_type bilan) va fact_source'i o'zgartirilmaydi — `KPI_IN_USE`, o'rniga yangi KPI yaratiladi. Qoida parametrlari (pog'onalar, foizlar, filtrlar) o'zgartiriladi va joriy OPEN davrning butun oyiga ta'sir qiladi; yopilgan oylar `kpi_results` da o'zgarmaydi. Qoidalar versiyasi — MVP'dan keyin.
+- `kpi_results` da natijasi bor KPI'ning hisoblash turi, aggregation, source_field, scope, **team_link_type** va **fact_source**'i o'zgartirilmaydi — `KPI_IN_USE`, o'rniga yangi KPI yaratiladi (team_link_type va fact_source — texnik qaror, tasdiqlandi 2026-10-02). Qoida parametrlari (pog'onalar, foizlar, filtrlar) o'zgartiriladi va joriy OPEN davrning butun oyiga ta'sir qiladi; yopilgan oylar `kpi_results` da o'zgarmaydi. Qoidalar versiyasi — MVP'dan keyin.
 - `fact_source`: hozircha faqat `EXCEL` va `MANUAL` (Smartup API MVP'da yo'q).
+- **`position_kpis` va `employee_kpi_overrides` — CLOSED davr himoyasi** (lavozim/maosh tarixidagi 4-bosqich qoidasi bilan bir xil, kod ham umumiy: `history-rules.ts` → `assertNotClosed`, `firstDayAfterEndChange`):
+  - yaratish va o'chirish (DELETE): yozuv davri (start..end) birorta CLOSED davrga tegsa — 409 `PERIOD_CLOSED`. Faqat OPEN yoki hali davri yo'q oylarga tegishli yozuv o'chiriladi;
+  - tugash sanasini o'zgartirish (PATCH `endDate`): o'zgarish eski va yangi sanadan kichigining ertasidan boshlanadi; shu kun CLOSED davr ichida bo'lsa — 409 `PERIOD_CLOSED`. Masalan, dekabr yopiq: ochiq yozuvni 2025-11-30 da yopish — xato, 2025-12-31 da yopish — o'tadi (o'zgarish 2026-01-01 dan);
+  - DELETE va PATCH auditga (`HISTORY_DELETE` / `HISTORY_UPDATE`) shu tranzaksiya ichida yoziladi.
+
+Texnik qarorlar (tasdiqlandi, 2026-10-02):
+
+- **API'da bog'langan yozuvlar:** so'rov tanasida — ID (`unitId`, `positionId`, `kpiId`); URL'da — biznes kodi (`/kpis/:code`, `/employees/:code/...`). Lavozim tarixi API'si bilan bir xil.
+- **Filtr operatorlari maydon turiga bog'langan:** ID maydonlar (`product_id`, `product_group_id`, `client_id`, `client_category_id`, `price_type_id`, `employee_id`) — faqat `=`, `!=`, `IN`, `NOT_IN` va faqat ID qiymatlar; `amount`, `quantity` — faqat `>`, `>=`, `<`, `<=` va son qiymat.
+  - **Eslatma (8-bosqich):** yadro raqamli solishtirishni `decimal.js` orqali bajarishi kerak, matn sifatida emas (`"100.00"` va `"100"` — bir xil son).
+- **`fact_source = MANUAL`** (fakt qo'lda kiritiladi): `aggregation` va `source_field` bo'sh, qoidalarda filtr yo'q — savdo qatorlari ishlatilmaydi. MANUAL hisoblash turidagi KPI'da fact_source ham MANUAL bo'ladi.
 
 ## 3. Ish haqi (payroll)
 

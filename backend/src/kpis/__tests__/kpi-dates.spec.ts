@@ -78,6 +78,10 @@ describe('planKpiLinkEnd — tugash sanasini o\'zgartirish', () => {
     expect(() => planKpiLinkEnd([open], 1n, '2026-02-28', rules)).not.toThrow();
     expect(() => planKpiLinkEnd([open], 1n, '2026-03-31', rules)).not.toThrow();
     expectRuleError(() => planKpiLinkEnd([range(1, '2026-01-01', '2026-01-31')], 1n, null, rules), 'PERIOD_CLOSED');
+    // Eski sana yopilgan oyda — uzaytirish ham yopilgan fevralni o'zgartiradi.
+    expectRuleError(() => planKpiLinkEnd([range(1, '2026-01-01', '2026-01-31')], 1n, '2026-03-31', rules), 'PERIOD_CLOSED');
+    // Eski va yangi sana ochiq oyda — boshlanishi yopilgan davrda bo'lsa ham o'tadi.
+    expect(() => planKpiLinkEnd([range(1, '2025-11-01', '2026-03-31')], 1n, '2026-05-31', rules)).not.toThrow();
   });
 
   it("uzaytirilsa keyingi yozuv bilan ustma-ust — HISTORY_OVERLAP", () => {
@@ -90,6 +94,8 @@ describe('planKpiLinkEnd — tugash sanasini o\'zgartirish', () => {
 describe("planKpiLinkDelete — o'chirish", () => {
   it('yopilgan davrga tegsa — PERIOD_CLOSED', () => {
     expectRuleError(() => planKpiLinkDelete(range(1, '2025-11-01', null), CLOSED_DEC), 'PERIOD_CLOSED');
+    expectRuleError(() => planKpiLinkDelete(range(1, '2025-12-01', '2025-12-31'), CLOSED_DEC), 'PERIOD_CLOSED');
+    expectRuleError(() => planKpiLinkDelete(range(1, '2025-11-01', '2026-05-31'), CLOSED_DEC), 'PERIOD_CLOSED');
     expect(() => planKpiLinkDelete(range(1, '2026-01-01', null), CLOSED_DEC)).not.toThrow();
   });
 });
