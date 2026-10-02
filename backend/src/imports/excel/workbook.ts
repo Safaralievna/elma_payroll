@@ -62,7 +62,7 @@ export interface GuideSheet {
 }
 
 export interface WorkbookOptions {
-  /** Ustun nomi → izoh: 1-ma'lumot qatoridagi katakka Excel izohi (note) bo'lib qo'yiladi. */
+  /** Ustun nomi → izoh: sarlavha katakchasiga Excel izohi (note) bo'lib qo'yiladi (ma'lumot qatori bo'sh bo'lishi mumkin). */
   notes?: Readonly<Record<string, string>>;
   /** Ustun nomi → ochiladigan ro'yxat qiymatlari (faqat shu qiymatlar kiritiladi). */
   lists?: Readonly<Record<string, readonly string[]>>;
@@ -95,7 +95,7 @@ export async function buildWorkbook(
     return index + 1;
   };
   for (const [name, note] of Object.entries(options.notes ?? {})) {
-    sheet.getCell(2, columnOf(name)).note = note;
+    sheet.getCell(1, columnOf(name)).note = note;
   }
   for (const [name, values] of Object.entries(options.lists ?? {})) {
     const column = columnOf(name);

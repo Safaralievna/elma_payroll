@@ -55,7 +55,7 @@ describe('readFirstSheet — .xlsx faylni katakchalarga aylantirish', () => {
     ]);
   });
 
-  it('buildWorkbook: izoh (note) 1-ma\'lumot qatoriga qo\'yiladi, qiymatni o\'zgartirmaydi', async () => {
+  it('buildWorkbook: izoh (note) sarlavha katakchasiga qo\'yiladi, qiymatni o\'zgartirmaydi', async () => {
     const buffer = await buildWorkbook(['a', 'b'], [['x', 1]], { notes: { b: 'avval yaratiladi' } });
     expect(await readFirstSheet(buffer)).toEqual([
       { rowNumber: 1, cells: ['a', 'b'] },
@@ -63,7 +63,7 @@ describe('readFirstSheet — .xlsx faylni katakchalarga aylantirish', () => {
     ]);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-    expect(workbook.worksheets[0]!.getCell('B2').note).toBe('avval yaratiladi');
+    expect(workbook.worksheets[0]!.getCell('B1').note).toBe('avval yaratiladi');
   });
 });
 

@@ -18,12 +18,11 @@ async function load(path: ImportPath): Promise<{ buffer: Buffer; book: ExcelJS.W
 describe.each(IMPORT_PATHS)('shablon: %s', (path) => {
   const header = KINDS[path].columns.map((column) => column.name);
 
-  it('1-varaq: sarlavha import ustunlari bilan bir xil + bitta namuna qator; import uni o\'qiy oladi', async () => {
+  it("1-varaq: faqat sarlavha (import ustunlari bilan bir xil), namuna qator yo'q; import uni «ma'lumot yo'q» deb qaytaradi", async () => {
     const { buffer } = await load(path);
     const raw = await readFirstSheet(buffer);
-    expect(raw[0]!.cells).toEqual(header);
-    expect(raw).toHaveLength(2);
-    expect(mapSheet(raw, KINDS[path].columns, IMPORT_MAX_ROWS)).toHaveLength(1);
+    expect(raw).toEqual([{ rowNumber: 1, cells: header }]);
+    expect(() => mapSheet(raw, KINDS[path].columns, IMPORT_MAX_ROWS)).toThrow("Faylda ma'lumot qatori yo'q");
   });
 
   it("2-varaq «Yo'riqnoma»: ustun | majburiymi | format | misol, har bir ustun uchun bitta qator", async () => {
@@ -37,6 +36,7 @@ describe.each(IMPORT_PATHS)('shablon: %s', (path) => {
       expect(row.getCell(1).value).toBe(name);
       expect(String(row.getCell(2).value)).not.toBe('');
       expect(String(row.getCell(3).value)).not.toBe('');
+      expect(String(row.getCell(4).value)).not.toBe(''); // misol har bir ustun uchun bor
     });
   });
 
@@ -45,7 +45,7 @@ describe.each(IMPORT_PATHS)('shablon: %s', (path) => {
     const raw = await readFirstSheet(buffer);
     const guideNames = new Set(['ustun', 'majburiymi', 'format', 'misol']);
     for (const row of raw) expect(row.cells.some((cell) => guideNames.has(String(cell)))).toBe(false);
-    expect(raw).toHaveLength(2);
+    expect(raw).toHaveLength(1);
   });
 
   it('sarlavha qalin va muzlatilgan; ustun kengligi sarlavhaga mos', async () => {
@@ -59,29 +59,31 @@ describe.each(IMPORT_PATHS)('shablon: %s', (path) => {
   });
 });
 
-describe('shablon: izohlar va ro\'yxatlar', () => {
-  it('employees: lavozim_sanasi va oylik_sanasi — oyning 1-kuni; bo\'lim uchun oddiy tildagi izoh', async () => {
+describe("shablon: izohlar, misollar va ro'yxatlar", () => {
+  it("employees: misollar yo'riqnomada; lavozim_sanasi va oylik_sanasi — oyning 1-kuni; bo'lim izohi sarlavhada", async () => {
     const { book } = await load('employees');
-    const sheet = book.worksheets[0]!;
-    const cell = (name: string) => sheet.getCell(2, KINDS.employees.columns.findIndex((c) => c.name === name) + 1);
-    expect(cell('lavozim_sanasi').value).toBe('2025-02-01');
-    expect(cell('oylik_sanasi').value).toBe('2025-02-01');
-    expect(cell('lavozim_kodi').value).toBe('SALES_REP');
-    expect(cell('bolim_kodi').note).toBe("Bu bo'lim avval tizimda yaratilgan bo'lishi kerak (Ma'lumotnomalar → Bo'limlar)");
+    const [sheet, guide] = book.worksheets as [ExcelJS.Worksheet, ExcelJS.Worksheet];
+    const example = (name: string) => guide.getRow(KINDS.employees.columns.findIndex((c) => c.name === name) + 2).getCell(4).value;
+    expect(example('lavozim_sanasi')).toBe('2026-02-01');
+    expect(example('oylik_sanasi')).toBe('2026-02-01');
+    expect(example('lavozim_kodi')).toBe('SALES_REP');
+    const bolim = KINDS.employees.columns.findIndex((c) => c.name === 'bolim_kodi') + 1;
+    expect(sheet.getCell(1, bolim).note).toBe("Bu bo'lim avval tizimda yaratilgan bo'lishi kerak (Ma'lumotnomalar → Bo'limlar)");
+    expect(sheet.actualRowCount).toBe(1); // ro'yxatli bo'sh katakchalar rowCount'ni oshiradi, ma'lumot qatori emas
   });
 
-  it('products va clients: guruh va kategoriya uchun izoh', async () => {
+  it('products va clients: guruh va kategoriya uchun izoh sarlavhada', async () => {
     const products = (await load('products')).book.worksheets[0]!;
-    expect(products.getCell('C2').note).toBe(
+    expect(products.getCell('C1').note).toBe(
       "Bu mahsulot guruhi avval tizimda yaratilgan bo'lishi kerak (Ma'lumotnomalar → Mahsulot guruhlari)",
     );
     const clients = (await load('clients')).book.worksheets[0]!;
-    expect(clients.getCell('C2').note).toBe(
+    expect(clients.getCell('C1').note).toBe(
       "Bu mijoz kategoriyasi avval tizimda yaratilgan bo'lishi kerak (Ma'lumotnomalar → Mijoz kategoriyalari)",
     );
   });
 
-  it('team-links: «turi» ustunida SUPERVISOR / OPERATOR ochiladigan ro\'yxati', async () => {
+  it("team-links: «turi» ustunida SUPERVISOR / OPERATOR ochiladigan ro'yxati", async () => {
     const sheet = (await load('team-links')).book.worksheets[0]!;
     const column = KINDS['team-links'].columns.findIndex((c) => c.name === 'turi') + 1;
     for (const row of [2, 3, 500]) {
