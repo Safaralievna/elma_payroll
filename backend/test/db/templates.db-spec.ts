@@ -65,6 +65,9 @@ function upload(type: string, buffer: Buffer) {
     .attach('file', buffer, `${type}-shablon.xlsx`);
 }
 
+/** Ishdan ketgan sana misoli xodimni nofaol qiladi (team-links uni rad etadi) — ketmagan xodim sifatida bo'sh qoldiriladi. */
+const LEAVE_BLANK = new Set(['ishdan_ketgan_sana']);
+
 /** Shablon: 1-varaq faqat sarlavha; «Yo'riqnoma» dagi «misol» ustunidan bitta ma'lumot qatori yig'iladi. */
 async function fileFromExamples(template: Buffer): Promise<{ header: string[]; file: Buffer }> {
   const book = new ExcelJS.Workbook();
@@ -77,7 +80,7 @@ async function fileFromExamples(template: Buffer): Promise<{ header: string[]; f
   guide.eachRow((row, number) => {
     if (number > 1 && row.getCell(2).value) examples.set(String(row.getCell(1).value), String(row.getCell(4).value));
   });
-  return { header, file: await buildWorkbook(header, [header.map((name) => examples.get(name) ?? null)]) };
+  return { header, file: await buildWorkbook(header, [header.map((name) => (LEAVE_BLANK.has(name) ? null : (examples.get(name) ?? null)))]) };
 }
 
 // Tartib muhim: team-links misolidagi xodim E001 avval employees importi bilan yaratiladi.
