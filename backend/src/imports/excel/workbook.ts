@@ -50,12 +50,24 @@ function toSheetCell(value: ExcelJS.CellValue): SheetCell {
   return null;
 }
 
-/** Bitta varaqli .xlsx: 1-qator sarlavha, qolgani ma'lumot. Shablon va testlar uchun. */
-export async function buildWorkbook(header: readonly string[], rows: readonly (readonly unknown[])[]): Promise<Buffer> {
+/**
+ * Bitta varaqli .xlsx: 1-qator sarlavha, qolgani ma'lumot. Shablon va testlar uchun.
+ * `notes`: ustun nomi → izoh, 1-ma'lumot qatoridagi katakka Excel izohi (note) bo'lib qo'yiladi.
+ */
+export async function buildWorkbook(
+  header: readonly string[],
+  rows: readonly (readonly unknown[])[],
+  notes: Readonly<Record<string, string>> = {},
+): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Import');
   sheet.addRow([...header]).font = { bold: true };
   for (const row of rows) sheet.addRow([...row]);
+  for (const [name, note] of Object.entries(notes)) {
+    const column = header.indexOf(name);
+    if (column === -1) throw new Error(`Izoh uchun "${name}" ustuni sarlavhada yo'q`);
+    sheet.getCell(2, column + 1).note = note;
+  }
   sheet.columns.forEach((column) => {
     column.width = 20;
   });

@@ -4,7 +4,10 @@ import { buildWorkbook } from '../src/imports/excel/workbook';
 import { ImportPath } from '../src/imports/import-kind';
 import { KINDS } from '../src/imports/imports.service';
 
-/** Ustun nomi → namuna qiymat. Sanalar YYYY-MM-DD. Faqat hujjat uchun: haqiqiy ma'lumot emas. */
+/**
+ * Ustun nomi → namuna qiymat. Sanalar YYYY-MM-DD. Faqat hujjat uchun: haqiqiy ma'lumot emas.
+ * Seed'da bor kodlar (lavozim: SALES_REP, bog'lanish turi: SUPERVISOR) aynan shunday ishlatiladi.
+ */
 const SAMPLES: Record<ImportPath, Record<string, string | number>> = {
   employees: {
     xodim_kodi: 'E001',
@@ -30,6 +33,11 @@ const SAMPLES: Record<ImportPath, Record<string, string | number>> = {
   clients: { mijoz_kodi: 'C001', nomi: 'Namuna mijoz', kategoriya_kodi: 'K001' },
 };
 
+/** Seed'da yo'q kodlar uchun katak izohi: import'dan oldin ma'lumotnomada bo'lishi kerak. */
+const NOTES: Partial<Record<ImportPath, Record<string, string>>> = {
+  employees: { bolim_kodi: 'avval /departments orqali yaratiladi' },
+};
+
 /** /imports/templates/:type bilan bir xil sarlavha + bitta namuna qator → docs/templates/<tur>-shablon.xlsx */
 async function main(): Promise<void> {
   const outDir = join(__dirname, '..', '..', 'docs', 'templates');
@@ -42,7 +50,7 @@ async function main(): Promise<void> {
       return sample[name];
     });
     const file = join(outDir, `${path}-shablon.xlsx`);
-    await writeFile(file, await buildWorkbook(header, [row]));
+    await writeFile(file, await buildWorkbook(header, [row], NOTES[path]));
     console.log(`yozildi: ${file}`);
   }
 }

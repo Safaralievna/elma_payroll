@@ -54,6 +54,17 @@ describe('readFirstSheet — .xlsx faylni katakchalarga aylantirish', () => {
       { rowNumber: 2, cells: ['x', 1] },
     ]);
   });
+
+  it('buildWorkbook: izoh (note) 1-ma\'lumot qatoriga qo\'yiladi, qiymatni o\'zgartirmaydi', async () => {
+    const buffer = await buildWorkbook(['a', 'b'], [['x', 1]], { b: 'avval yaratiladi' });
+    expect(await readFirstSheet(buffer)).toEqual([
+      { rowNumber: 1, cells: ['a', 'b'] },
+      { rowNumber: 2, cells: ['x', 1] },
+    ]);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    expect(workbook.worksheets[0]!.getCell('B2').note).toBe('avval yaratiladi');
+  });
 });
 
 describe('mapSheet — sarlavha bo\'yicha ustunlarni topish', () => {
