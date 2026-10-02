@@ -129,7 +129,7 @@ describe('Login urinishlari cheklovi (IP bo\'yicha daqiqasiga 5 ta)', () => {
 
     // Cheklov faqat login uchun: token bilan boshqa so'rovlar ishlayveradi.
     for (let i = 0; i < 7; i += 1) {
-      await request(server).get('/api/auth/me').set('Authorization', `Bearer ${tokenFor(app(), admin.id)}`).expect(200);
+      await request(server).get('/api/auth/me').set('Authorization', `Bearer ${await tokenFor(app(), admin.id)}`).expect(200);
     }
   });
 });
@@ -142,8 +142,8 @@ describe('Rollar: 401 / 403', () => {
   let approverToken: string;
 
   beforeAll(async () => {
-    calculatorToken = tokenFor(app(), (await createUser(prisma, { roles: ['CALCULATOR'] })).id);
-    approverToken = tokenFor(app(), (await createUser(prisma, { roles: ['APPROVER'] })).id);
+    calculatorToken = await tokenFor(app(), (await createUser(prisma, { roles: ['CALCULATOR'] })).id);
+    approverToken = await tokenFor(app(), (await createUser(prisma, { roles: ['APPROVER'] })).id);
   });
 
   it('tokensiz → 401 UNAUTHORIZED', async () => {
@@ -166,7 +166,7 @@ describe('Rollar: 401 / 403', () => {
 
   it('audit: ADMIN va APPROVER ko\'radi, CALCULATOR — 403', async () => {
     const server = app().getHttpServer();
-    await request(server).get('/api/audit-logs').set('Authorization', `Bearer ${tokenFor(app(), admin.id)}`).expect(200);
+    await request(server).get('/api/audit-logs').set('Authorization', `Bearer ${await tokenFor(app(), admin.id)}`).expect(200);
     await request(server).get('/api/audit-logs').set('Authorization', `Bearer ${approverToken}`).expect(200);
     await request(server).get('/api/audit-logs').set('Authorization', `Bearer ${calculatorToken}`).expect(403);
   });
@@ -174,7 +174,7 @@ describe('Rollar: 401 / 403', () => {
   it('ADMIN /roles → 3 ta rol', async () => {
     const res = await request(app().getHttpServer())
       .get('/api/roles')
-      .set('Authorization', `Bearer ${tokenFor(app(), admin.id)}`)
+      .set('Authorization', `Bearer ${await tokenFor(app(), admin.id)}`)
       .expect(200);
     expect(res.body.map((r: { name: string }) => r.name).sort()).toEqual(['ADMIN', 'APPROVER', 'CALCULATOR']);
   });
@@ -186,8 +186,8 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
   const app = useApp();
   let adminToken: string;
 
-  beforeAll(() => {
-    adminToken = tokenFor(app(), admin.id);
+  beforeAll(async () => {
+    adminToken = await tokenFor(app(), admin.id);
   });
 
   const post = (body: object) =>
@@ -252,7 +252,7 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
 
   it('rol olib tashlansa — eski token bilan keyingi so\'rov darhol 403', async () => {
     const approver = await createUser(prisma, { roles: ['APPROVER'] });
-    const token = tokenFor(app(), approver.id);
+    const token = await tokenFor(app(), approver.id);
     const server = app().getHttpServer();
 
     await request(server).get('/api/audit-logs').set('Authorization', `Bearer ${token}`).expect(200);
@@ -266,7 +266,7 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
 
   it('bloklansa — eski token bilan 401 USER_INACTIVE', async () => {
     const user = await createUser(prisma, { roles: ['CALCULATOR'] });
-    const token = tokenFor(app(), user.id);
+    const token = await tokenFor(app(), user.id);
 
     await patch(user.id, { isActive: false }).expect(200);
     const res = await request(app().getHttpServer()).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(401);
@@ -297,9 +297,13 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
     expect((await patch(admin.id, {}).expect(400)).body.code).toBe('VALIDATION_ERROR');
   });
 
-  it('parolni tiklash (reset) → yangi parol ishlaydi, eskisi yo\'q; USER_PASSWORD_RESET audit', async () => {
+  it('parolni tiklash (reset) → yangi parol ishlaydi, eskisi yo\'q; USER_PASSWORD_RESET audit; eski token → 401', async () => {
     const user = await createUser(prisma, { roles: ['CALCULATOR'] });
-    await request(app().getHttpServer())
+    const userToken = await tokenFor(app(), user.id);
+    const server = app().getHttpServer();
+    await request(server).get('/api/auth/me').set('Authorization', `Bearer ${userToken}`).expect(200);
+
+    await request(server)
       .post(`/api/users/${user.id}/reset-password`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ newPassword: 'tiklangan-parol' })
@@ -313,6 +317,11 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
     const { verify } = await import('argon2');
     expect(await verify(stored.passwordHash, 'tiklangan-parol')).toBe(true);
     expect(await verify(stored.passwordHash, user.password)).toBe(false);
+
+    // Tiklangandan keyin foydalanuvchining eski tokeni — 401; admin tokeniga ta'sir yo'q.
+    const stale = await request(server).get('/api/auth/me').set('Authorization', `Bearer ${userToken}`).expect(401);
+    expect(stale.body.code).toBe('UNAUTHORIZED');
+    await request(server).get('/api/auth/me').set('Authorization', `Bearer ${adminToken}`).expect(200);
   });
 
   it('TRANZAKSIYA: audit yozilmasa — foydalanuvchi ham yaratilmaydi', async () => {
@@ -334,9 +343,9 @@ describe('Foydalanuvchilarni boshqarish (ADMIN)', () => {
 describe('POST /api/auth/change-password', () => {
   const app = useApp();
 
-  it('joriy parol noto\'g\'ri → 400; to\'g\'ri → 204, eski parol endi ishlamaydi; PASSWORD_CHANGE audit', async () => {
+  it('joriy parol noto\'g\'ri → 400; to\'g\'ri → 204, eski parol va eski token endi ishlamaydi; PASSWORD_CHANGE audit', async () => {
     const user = await createUser(prisma, { roles: ['CALCULATOR'] });
-    const token = tokenFor(app(), user.id);
+    const token = await tokenFor(app(), user.id);
     const server = app().getHttpServer();
 
     const wrong = await request(server)
@@ -352,8 +361,16 @@ describe('POST /api/auth/change-password', () => {
       .send({ currentPassword: user.password, newPassword: 'yangi-parol-1' })
       .expect(204);
 
+    // Parol almashgach eski token darhol ishlamaydi; yangi login bilan olingan token ishlaydi.
+    const stale = await request(server).get('/api/auth/me').set('Authorization', `Bearer ${token}`).expect(401);
+    expect(stale.body.code).toBe('UNAUTHORIZED');
+
     await request(server).post('/api/auth/login').send({ username: user.username, password: user.password }).expect(401);
-    await request(server).post('/api/auth/login').send({ username: user.username, password: 'yangi-parol-1' }).expect(200);
+    const relogin = await request(server)
+      .post('/api/auth/login')
+      .send({ username: user.username, password: 'yangi-parol-1' })
+      .expect(200);
+    await request(server).get('/api/auth/me').set('Authorization', `Bearer ${relogin.body.accessToken}`).expect(200);
 
     const rows = await auditRows('PASSWORD_CHANGE', user.id);
     expect(rows).toHaveLength(1);
@@ -376,7 +393,7 @@ describe('GET /api/audit-logs', () => {
 
   it('entityType/entityId filtri, sahifalash, username bilan; BigInt → satr', async () => {
     const user = await createUser(prisma, { roles: ['CALCULATOR'] });
-    const adminToken = tokenFor(app(), admin.id);
+    const adminToken = await tokenFor(app(), admin.id);
     const server = app().getHttpServer();
     await request(server).patch(`/api/users/${user.id}`).set('Authorization', `Bearer ${adminToken}`).send({ roles: ['APPROVER'] }).expect(200);
     await request(server).patch(`/api/users/${user.id}`).set('Authorization', `Bearer ${adminToken}`).send({ isActive: false }).expect(200);
@@ -408,7 +425,7 @@ describe('GET /api/audit-logs', () => {
   it('noto\'g\'ri filtr → 400 VALIDATION_ERROR', async () => {
     const res = await request(app().getHttpServer())
       .get('/api/audit-logs?entityId=abc')
-      .set('Authorization', `Bearer ${tokenFor(app(), admin.id)}`)
+      .set('Authorization', `Bearer ${await tokenFor(app(), admin.id)}`)
       .expect(400);
     expect(res.body.code).toBe('VALIDATION_ERROR');
   });

@@ -17,7 +17,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | 8 | Hisoblash servisi: faktlar → KPI natijalari → payroll (bonus, jarima, avans, depozit, qarz, qayta hisob) | ⏳ |
 | 9 | Davr: OPEN → REVIEW → CLOSED, ikki kishi qoidasi, CLOSED himoyasi | ⏳ |
 | 10 | Depozitdan yechish, to'lovlar (karta/naqd), Vedomost va Talabnoma (Excel) | ⏳ |
-| 11 | Frontend: React + Tailwind, oddiy jadval va formalar | ⏳ |
+| 11 | Frontend: React + Tailwind, oddiy jadval va formalar (team lead dizayn tizimi bo'yicha) | ⏳ |
 | 12 | Docker bilan ishga tushirish, Excel bilan parallel sinov | ⏳ |
 
 ---
@@ -64,7 +64,7 @@ Manba: `docs/ERD_v2.dbml` (41 jadval). Undan chetga chiqilmaydi.
 
 ## 3-bosqich — Auth, rollar, audit ✅
 
-Natija: `npm test` 138/138, `npm run typecheck` xatosiz, `npm run test:db` 55/55 (shundan E2E 25), `npm run db:check-drift` — "No difference detected".
+Natija: `npm test` 143/143, `npm run typecheck` xatosiz, `npm run test:db` 55/55 (shundan E2E 25), `npm run db:check-drift` — "No difference detected".
 
 Tasdiqlangan qarorlar (2026-10-01):
 - Token 8 soat (`JWT_EXPIRES_IN`), refresh token yo'q. `JWT_SECRET` < 32 belgi → server ishga tushmaydi.
@@ -84,4 +84,4 @@ Amalga oshirildi:
 6. `@nestjs/jwt` 11 (12-versiya faqat ESM — Jest/CommonJS bilan ishlamaydi).
 7. `tsconfig.build.json`: `incremental: false` — eski `.tsbuildinfo` sababli `nest build` ba'zi `.js` fayllarni chiqarmay qo'yayotgan edi.
 
-Ma'lum cheklov: parol almashtirilsa yoki tiklansa, avval berilgan token muddati tugaguncha (≤ 8 soat) amal qiladi — ERD'da token versiyasi ustuni yo'q. Bloklash esa darhol ishlaydi.
+8. Token parol bilan bog'langan (2026-10-02): JWT payload'ida `pwd` — `sha256(passwordHash)` ning birinchi 16 belgisi (`src/auth/password-fingerprint.ts`). `JwtAuthGuard` bazadagi joriy xeshdan izni hisoblab solishtiradi; mos kelmasa (yoki `pwd` yo'q bo'lsa) — 401 `UNAUTHORIZED`. Parol almashtirilsa (`change-password`) yoki tiklansa (`reset-password`), eski tokenlar darhol ishlamaydi — o'z parolini almashtirgan foydalanuvchi ham qaytadan login qiladi. ERD o'zgarmadi (alohida token versiyasi ustuni kerak bo'lmadi). Bloklash ham darhol ishlaydi.

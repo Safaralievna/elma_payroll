@@ -21,6 +21,7 @@ Baza sxemasi: **`docs/ERD_v2.dbml`** — jadvallar, ustunlar va cheklovlar uchun
 - Validatsiya: Zod. Auth: JWT, parollar argon2 bilan xeshlanadi.
 - Pul: `decimal.js` (Prisma Decimal bilan mos). Excel: `exceljs`.
 - Frontend (keyinroq): React + TypeScript + Tailwind (`frontend/`), oddiy jadval va formalar.
+- Frontend dizayni (ranglar, shriftlar, tugmalar, komponentlar) — team lead beradigan kompaniya dizayn tizimi asosida. O'zingcha rang, shrift yoki komponent uslubi tanlama. Dizayn tizimi `docs/` ga qo'yilmaguncha frontend yozishni boshlama.
 - Lokal DB: Docker (docker-compose).
 - MVP'da YO'Q: Redis/BullMQ, Telegraf, Smartup API.
 

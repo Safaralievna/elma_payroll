@@ -4,6 +4,7 @@ import { AuditService } from '../../audit/audit.service';
 import { AppError } from '../../common/app-error';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from '../auth.service';
+import { passwordFingerprint } from '../password-fingerprint';
 
 // argon2.verify ni kuzatish uchun (haqiqiy funksiya ishlaydi, faqat chaqiruvlar yoziladi).
 jest.mock('argon2', () => {
@@ -57,11 +58,11 @@ describe('AuthService.login', () => {
     throw new Error('login xato bermadi');
   }
 
-  it('to\'g\'ri parol — token (sub = user id) va foydalanuvchi; LOGIN_SUCCESS audit', async () => {
+  it('to\'g\'ri parol — token (sub = user id, pwd = parol izi) va foydalanuvchi; LOGIN_SUCCESS audit', async () => {
     findUnique.mockResolvedValue(dbUser());
     const result = await service.login({ username: 'ali', password: 'togri-parol' });
 
-    expect(await jwt.verifyAsync(result.accessToken)).toMatchObject({ sub: '7' });
+    expect(await jwt.verifyAsync(result.accessToken)).toMatchObject({ sub: '7', pwd: passwordFingerprint(realHash) });
     expect(result.user).toMatchObject({ id: '7', username: 'ali', roles: ['CALCULATOR'] });
     expect(auditLog).toHaveBeenCalledWith(
       prisma,

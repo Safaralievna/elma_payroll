@@ -1,8 +1,12 @@
 import type { Request } from 'express';
 
-/** Tokenda faqat foydalanuvchi id'si. Rollar har so'rovda bazadan o'qiladi. */
+/**
+ * Tokenda foydalanuvchi id'si va parol xeshining barmoq izi (`passwordFingerprint`).
+ * Rollar har so'rovda bazadan o'qiladi.
+ */
 export interface JwtPayload {
   sub: string;
+  pwd: string;
 }
 
 /** JwtAuthGuard so'rovga biriktiradigan joriy foydalanuvchi. */

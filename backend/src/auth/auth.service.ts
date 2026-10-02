@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toUserView, USER_INCLUDE, UserView } from '../users/user-view';
 import { ChangePasswordInput, LoginInput } from './auth.schemas';
 import { AuthUser, JwtPayload } from './auth.types';
+import { passwordFingerprint } from './password-fingerprint';
 
 export interface LoginResult {
   accessToken: string;
@@ -57,7 +58,7 @@ export class AuthService implements OnModuleInit {
       throw new AppError(HttpStatus.UNAUTHORIZED, 'USER_INACTIVE', 'Foydalanuvchi bloklangan');
     }
 
-    const payload: JwtPayload = { sub: user.id.toString() };
+    const payload: JwtPayload = { sub: user.id.toString(), pwd: passwordFingerprint(user.passwordHash) };
     const accessToken = await this.jwt.signAsync(payload);
     await this.audit.log(this.prisma, {
       userId: user.id,

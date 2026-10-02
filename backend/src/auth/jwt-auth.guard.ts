@@ -5,12 +5,15 @@ import { AppError } from '../common/app-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY } from './auth.constants';
 import { AuthenticatedRequest, JwtPayload } from './auth.types';
+import { passwordFingerprint } from './password-fingerprint';
 
 /**
  * Global guard: `@Public()` belgilanmagan hamma endpoint token talab qiladi.
  *
  * Token faqat "kim" ekanini aytadi. Foydalanuvchi va rollar har so'rovda bazadan
  * o'qiladi — admin kimnidir bloklasa yoki rolini olsa, darhol kuchga kiradi.
+ * Tokendagi parol izi bazadagi joriy xeshnikiga mos kelishi shart — parol
+ * almashtirilsa yoki tiklansa, eski tokenlar darhol ishlamay qoladi.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -39,7 +42,7 @@ export class JwtAuthGuard implements CanActivate {
     } catch {
       throw unauthorized("Token yaroqsiz yoki muddati o'tgan");
     }
-    if (typeof payload.sub !== 'string' || !/^\d{1,18}$/.test(payload.sub)) {
+    if (typeof payload.sub !== 'string' || !/^\d{1,18}$/.test(payload.sub) || typeof payload.pwd !== 'string') {
       throw unauthorized('Token yaroqsiz');
     }
 
@@ -49,6 +52,10 @@ export class JwtAuthGuard implements CanActivate {
     });
     if (!user) {
       throw unauthorized('Foydalanuvchi topilmadi');
+    }
+    // Bloklanganlik tekshiruvidan oldin: eskirgan token egasiga hech narsa aytilmaydi.
+    if (payload.pwd !== passwordFingerprint(user.passwordHash)) {
+      throw unauthorized("Parol o'zgargan — qaytadan kiring");
     }
     if (!user.isActive) {
       throw new AppError(HttpStatus.UNAUTHORIZED, 'USER_INACTIVE', 'Foydalanuvchi bloklangan');

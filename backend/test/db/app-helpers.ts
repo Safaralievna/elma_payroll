@@ -5,6 +5,8 @@ import { hash } from 'argon2';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
 import { RoleName } from '../../src/auth/auth.constants';
+import { JwtPayload } from '../../src/auth/auth.types';
+import { passwordFingerprint } from '../../src/auth/password-fingerprint';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { e2eDatabaseUrl } from './db-helpers';
 
@@ -28,9 +30,14 @@ export async function createTestApp(): Promise<INestApplication> {
   return app;
 }
 
-/** Login'ni chetlab o'tib token yaratadi (login cheklovini sarflamaslik uchun). */
-export function tokenFor(app: INestApplication, userId: bigint): string {
-  return app.get(JwtService).sign({ sub: userId.toString() });
+/**
+ * Login'ni chetlab o'tib token yaratadi (login cheklovini sarflamaslik uchun).
+ * Parol izi bazadagi joriy xeshdan olinadi — xuddi login'dagidek.
+ */
+export async function tokenFor(app: INestApplication, userId: bigint): Promise<string> {
+  const user = await app.get(PrismaService).user.findUniqueOrThrow({ where: { id: userId } });
+  const payload: JwtPayload = { sub: userId.toString(), pwd: passwordFingerprint(user.passwordHash) };
+  return app.get(JwtService).sign(payload);
 }
 
 export async function ensureRoles(prisma: PrismaService): Promise<void> {
