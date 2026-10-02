@@ -36,6 +36,8 @@ const SAMPLES: Record<ImportPath, Record<string, string | number>> = {
 /** Seed'da yo'q kodlar uchun katak izohi: import'dan oldin ma'lumotnomada bo'lishi kerak. */
 const NOTES: Partial<Record<ImportPath, Record<string, string>>> = {
   employees: { bolim_kodi: 'avval /departments orqali yaratiladi' },
+  products: { guruh_kodi: 'avval /product-groups orqali yaratiladi' },
+  clients: { kategoriya_kodi: 'avval /client-categories orqali yaratiladi' },
 };
 
 /** /imports/templates/:type bilan bir xil sarlavha + bitta namuna qator → docs/templates/<tur>-shablon.xlsx */
