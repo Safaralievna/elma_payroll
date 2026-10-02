@@ -9,8 +9,9 @@ import { Prisma } from '../generated/prisma/client';
 import { lastClosedDay } from '../history/history-db';
 import { PrismaService } from '../prisma/prisma.service';
 import { SheetRow, mapSheet } from './excel/sheet';
-import { buildWorkbook, readFirstSheet } from './excel/workbook';
+import { readFirstSheet } from './excel/workbook';
 import { ImportFileError } from './import-errors';
+import { buildImportTemplate } from './import-templates';
 import { IMPORT_TYPES, ImportKind, ImportPath, Tx } from './import-kind';
 import {
   IMPORT_ERRORS_IN_RESPONSE,
@@ -223,12 +224,9 @@ export class ImportsService {
     };
   }
 
-  /** Bo'sh shablon: faqat sarlavha qatori. */
+  /** Shablon: sarlavha + namuna qator + «Yo'riqnoma» varag'i. `npm run templates:export` ham shuni yozadi. */
   template(path: ImportPath): Promise<Buffer> {
-    return buildWorkbook(
-      KINDS[path].columns.map((column) => column.name),
-      [],
-    );
+    return buildImportTemplate(path, KINDS[path].columns);
   }
 
   private async rowCounts(batchIds: bigint[]): Promise<Map<bigint, { rowCount: number; invalidRowCount: number }>> {

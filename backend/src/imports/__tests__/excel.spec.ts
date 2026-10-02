@@ -56,7 +56,7 @@ describe('readFirstSheet — .xlsx faylni katakchalarga aylantirish', () => {
   });
 
   it('buildWorkbook: izoh (note) 1-ma\'lumot qatoriga qo\'yiladi, qiymatni o\'zgartirmaydi', async () => {
-    const buffer = await buildWorkbook(['a', 'b'], [['x', 1]], { b: 'avval yaratiladi' });
+    const buffer = await buildWorkbook(['a', 'b'], [['x', 1]], { notes: { b: 'avval yaratiladi' } });
     expect(await readFirstSheet(buffer)).toEqual([
       { rowNumber: 1, cells: ['a', 'b'] },
       { rowNumber: 2, cells: ['x', 1] },
