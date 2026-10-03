@@ -17,6 +17,9 @@ import { e2eDatabaseUrl } from './db-helpers';
 let app: INestApplication;
 let prisma: PrismaService;
 let calc: string;
+/** plans shabloni misoli shu oyga yuklanadi (E001 lavozimi 2026-02-01 dan); test yaratgan davr afterAll'da o'chiriladi. */
+const PLAN_PERIOD = { year: 2026, month: 2 };
+let planPeriodExisted = false;
 
 beforeAll(async () => {
   useTestEnv();
@@ -35,9 +38,20 @@ beforeAll(async () => {
   await prisma.clientCategory.upsert({ where: { code: 'K001' }, create: { name: 'Namuna kategoriya', code: 'K001' }, update: {} });
   // Team-links namunasidagi rahbar (E010) — oldindan mavjud xodim.
   await prisma.employee.upsert({ where: { employeeCode: 'E010' }, create: { employeeCode: 'E010' }, update: {} });
+  planPeriodExisted = (await prisma.payrollPeriod.findUnique({ where: { year_month: PLAN_PERIOD } })) !== null;
 });
 
 afterAll(async () => {
+  // plans misoli yozgan plan va batch (va test yaratgan bo'lsa — davr).
+  const period = await prisma.payrollPeriod.findUnique({ where: { year_month: PLAN_PERIOD } });
+  if (period) {
+    const batchWhere = { periodId: period.id, importType: 'PLANS' };
+    await prisma.kpiPlan.deleteMany({ where: { periodId: period.id, employee: { employeeCode: 'E001' } } });
+    await prisma.validationError.deleteMany({ where: { importRow: { batch: batchWhere } } });
+    await prisma.importRow.deleteMany({ where: { batch: batchWhere } });
+    await prisma.importBatch.deleteMany({ where: batchWhere });
+    if (!planPeriodExisted) await prisma.payrollPeriod.delete({ where: { id: period.id } });
+  }
   // Seed yaratgan `admin` ADMIN roli bilan: auth testlari "bitta faol admin" deb hisoblaydi — olib tashlaymiz.
   await prisma.userRole.deleteMany({ where: { user: { username: 'admin' } } });
   await prisma.user.deleteMany({ where: { username: 'admin' } });
@@ -59,14 +73,18 @@ async function downloadTemplate(type: string): Promise<Buffer> {
 }
 
 function upload(type: string, buffer: Buffer) {
+  const query = type === 'plans' ? `?year=${PLAN_PERIOD.year}&month=${PLAN_PERIOD.month}` : '';
   return request(app.getHttpServer())
-    .post(`/api/imports/${type}`)
+    .post(`/api/imports/${type}${query}`)
     .set('Authorization', `Bearer ${calc}`)
     .attach('file', buffer, `${type}-shablon.xlsx`);
 }
 
-/** Ishdan ketgan sana misoli xodimni nofaol qiladi (team-links uni rad etadi) — ketmagan xodim sifatida bo'sh qoldiriladi. */
-const LEAVE_BLANK = new Set(['ishdan_ketgan_sana']);
+/**
+ * Ishdan ketgan sana misoli xodimni nofaol qiladi (team-links uni rad etadi) — ketmagan xodim sifatida bo'sh qoldiriladi.
+ * qolda_summa — faqat MANUAL KPI uchun; misoldagi SALES_VOLUME (STEP) da bo'sh bo'lishi kerak.
+ */
+const LEAVE_BLANK = new Set(['ishdan_ketgan_sana', 'qolda_summa']);
 
 /** Shablon: 1-varaq faqat sarlavha; «Yo'riqnoma» dagi «misol» ustunidan bitta ma'lumot qatori yig'iladi. */
 async function fileFromExamples(template: Buffer): Promise<{ header: string[]; file: Buffer }> {
@@ -83,8 +101,8 @@ async function fileFromExamples(template: Buffer): Promise<{ header: string[]; f
   return { header, file: await buildWorkbook(header, [header.map((name) => (LEAVE_BLANK.has(name) ? null : (examples.get(name) ?? null)))]) };
 }
 
-// Tartib muhim: team-links misolidagi xodim E001 avval employees importi bilan yaratiladi.
-describe.each(['products', 'clients', 'employees', 'team-links'])('%s shabloni', (type) => {
+// Tartib muhim: team-links va plans misolidagi xodim E001 avval employees importi bilan yaratiladi.
+describe.each(['products', 'clients', 'employees', 'team-links', 'plans'])('%s shabloni', (type) => {
   it("namunasiz shablon; «misol» ustunidagi qiymatlar import'dan o'tadi", async () => {
     const { file } = await fileFromExamples(await downloadTemplate(type));
     const response = await upload(type, file);

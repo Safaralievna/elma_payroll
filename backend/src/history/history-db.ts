@@ -37,6 +37,7 @@ const STATUS_BY_CODE: Record<HistoryErrorCode, HttpStatus> = {
   INVALID_DATE_RANGE: HttpStatus.BAD_REQUEST,
   HISTORY_ORDER: HttpStatus.CONFLICT,
   PERIOD_CLOSED: HttpStatus.CONFLICT,
+  PERIOD_NOT_OPEN: HttpStatus.CONFLICT,
   NOT_LAST_RECORD: HttpStatus.CONFLICT,
   NO_CHANGE: HttpStatus.CONFLICT,
 };

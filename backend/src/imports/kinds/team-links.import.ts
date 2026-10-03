@@ -3,7 +3,7 @@ import { dateOrNull, dateToIso, isoToDate } from '../../common/iso-date';
 import { withoutId } from '../../employees/employee-view';
 import { TEAM_LINK_INCLUDE, TeamLinkRow, toTeamLinkView } from '../../team-links/team-link-view';
 import { TeamLinkType } from '../../team-links/team-link-types';
-import { ImportKind, Tx } from '../import-kind';
+import { ApplyContext, ImportKind, Tx } from '../import-kind';
 import { planTeamLinkRows, seriesKey, TEAM_LINK_COLUMNS, TeamLinkImportContext } from '../plans/team-links.plan';
 import { changedRecords, idGenerator, TeamLinkPayload, TrackedRecord } from '../plans/tracked-history';
 import { rowCodes, toDate } from './employees.import';
@@ -12,8 +12,9 @@ import { rowCodes, toDate } from './employees.import';
 export const TEAM_LINKS_IMPORT: ImportKind = {
   importType: 'TEAM_LINKS',
   columns: TEAM_LINK_COLUMNS,
+  periodic: false,
 
-  async plan(tx, rows, lastClosedDay) {
+  async plan(tx, rows, { lastClosedDay }) {
     const employees = await tx.employee.findMany({
       where: { employeeCode: { in: rowCodes(rows, 'rahbar_kodi', 'xodim_kodi') } },
       select: { id: true, employeeCode: true, isActive: true },
@@ -50,7 +51,7 @@ export const TEAM_LINKS_IMPORT: ImportKind = {
 
     return {
       outcomes,
-      async apply(db: Tx, actorId: bigint, audit: AuditEntry[]) {
+      async apply(db: Tx, { actorId }: ApplyContext, audit: AuditEntry[]) {
         const all = [...ctx.series.values()].flat();
         const { updates, creates } = changedRecords(all);
         // Avval mavjudlarini yopish, keyin yangilarini qo'shish — ustma-ust tushmasin.

@@ -39,6 +39,11 @@ export function isMonthEnd(iso: string): boolean {
   return isMonthStart(addDays(iso, 1));
 }
 
+/** Oyning 1-kuni: (2026, 2) → "2026-02-01". */
+export function monthStart(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
 /** Oyning oxirgi kuni: (2026, 2) → "2026-02-28". */
 export function monthEnd(year: number, month: number): string {
   return dateToIso(new Date(Date.UTC(year, month, 0)));

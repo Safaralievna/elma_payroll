@@ -27,3 +27,9 @@ export interface Page<T> {
   page: number;
   pageSize: number;
 }
+
+/** Davr: yil va oy (query yoki body). */
+export const yearMonthShape = {
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+};

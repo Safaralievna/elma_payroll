@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { EmployeesModule } from './employees/employees.module';
 import { ImportsModule } from './imports/imports.module';
+import { KpiPlansModule } from './kpi-plans/kpi-plans.module';
 import { KpisModule } from './kpis/kpis.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReferenceModule } from './reference/reference.module';
@@ -19,7 +20,7 @@ import { UsersModule } from './users/users.module';
  * AuthModule hamma endpointga JwtAuthGuard + RolesGuard qo'yadi (ochiqlari — @Public()).
  */
 @Module({
-  imports: [PrismaModule, AuditModule, AuthModule, UsersModule, ReferenceModule, EmployeesModule, TeamLinksModule, ImportsModule, KpisModule],
+  imports: [PrismaModule, AuditModule, AuthModule, UsersModule, ReferenceModule, EmployeesModule, TeamLinksModule, ImportsModule, KpisModule, KpiPlansModule],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

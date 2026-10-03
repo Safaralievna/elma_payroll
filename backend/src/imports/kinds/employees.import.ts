@@ -13,7 +13,7 @@ import { TEAM_LINK_INCLUDE, TeamLinkRow, toTeamLinkView } from '../../team-links
 import { TeamLinkType } from '../../team-links/team-link-types';
 import { RowReader } from '../excel/row-reader';
 import { SheetRow } from '../excel/sheet';
-import { ImportKind, Tx } from '../import-kind';
+import { ApplyContext, ImportKind, Tx } from '../import-kind';
 import { EMPLOYEE_COLUMNS, EmployeeFields, EmployeeImportContext, EmployeeState, planEmployeeRows } from '../plans/employees.plan';
 import {
   AssignmentPayload,
@@ -29,8 +29,9 @@ import {
 export const EMPLOYEES_IMPORT: ImportKind = {
   importType: 'EMPLOYEES',
   columns: EMPLOYEE_COLUMNS,
+  periodic: false,
 
-  async plan(tx, rows, lastClosedDay) {
+  async plan(tx, rows, { lastClosedDay }) {
     const codes = rowCodes(rows, 'xodim_kodi');
     const employees = await tx.employee.findMany({
       where: { employeeCode: { in: codes } },
@@ -103,7 +104,7 @@ export const EMPLOYEES_IMPORT: ImportKind = {
 
     return {
       outcomes,
-      async apply(db: Tx, actorId: bigint, audit: AuditEntry[]) {
+      async apply(db: Tx, { actorId }: ApplyContext, audit: AuditEntry[]) {
         const states = [...ctx.employees.values()];
 
         // 1. Xodimlar.

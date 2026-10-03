@@ -25,6 +25,11 @@ export const AUDIT_ACTIONS = [
   'KPI_RULE_CREATE',
   'KPI_RULE_UPDATE',
   'KPI_RULE_DELETE',
+  // 6-bosqich. PERIOD_CREATE — plan (va keyin savdo importi) davri yo'q oyga yozilganda (ensureOpenPeriod).
+  'PERIOD_CREATE',
+  'PLAN_CREATE',
+  'PLAN_UPDATE',
+  'PLAN_DELETE',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

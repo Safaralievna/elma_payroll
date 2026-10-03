@@ -76,6 +76,30 @@ const DOCS: Record<ImportPath, Record<string, ColumnDoc>> = {
     nomi: { required: YES, format: "Matn, ko'pi bilan 200 belgi", example: 'Namuna mijoz' },
     kategoriya_kodi: { required: NO, format: "Mijoz kategoriyasi kodi (Ma'lumotnomalar → Mijoz kategoriyalari)", example: 'K001', note: referenceNote('mijoz kategoriyasi', 'Mijoz kategoriyalari') },
   },
+  // Davr faylda emas — yuklashda tanlanadi (bitta fayl = bitta oy). KPI shu oyda xodimga biriktirilgan bo'lishi kerak.
+  plans: {
+    xodim_kodi: { required: YES, format: 'Xodim kodi (tizimda bor xodim)', example: 'E001' },
+    kpi_kodi: {
+      required: YES,
+      format: "KPI kodi (KPI konstruktor). KPI shu oyda xodimga (lavozimi yoki ADD orqali) biriktirilgan bo'lishi kerak",
+      example: 'SALES_VOLUME',
+    },
+    plan: {
+      required: 'STEP, LINEAR va shartli FIXED — ha; boshqalarida bo\'sh',
+      format: "Son, 0 dan katta; kasr ko'pi bilan 4 belgi. Minglik bo'shliq mumkin (150 000 000)",
+      example: '150000000',
+    },
+    baza_summa: {
+      required: "STEP va LINEAR — ha; boshqalarida bo'sh",
+      format: "100% bajarilishdagi to'lov, so'mda; ≥ 0, kasr ko'pi bilan 2 belgi",
+      example: '1500000',
+    },
+    qolda_summa: {
+      required: "Faqat MANUAL turidagi KPI — ha; boshqalarida bo'sh",
+      format: "Qo'lda kiritiladigan summa, so'mda; ≥ 0, kasr ko'pi bilan 2 belgi",
+      example: '500000',
+    },
+  },
 };
 
 const FOOTNOTES = [

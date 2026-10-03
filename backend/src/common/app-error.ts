@@ -39,6 +39,12 @@ export type ErrorCode =
   | 'END_NOT_MONTH_END'
   | 'KPI_IN_USE'
   | 'RULE_IN_USE'
+  // 6-bosqich: plan
+  | 'PERIOD_NOT_OPEN'
+  | 'PLAN_EXISTS'
+  | 'INVALID_PLAN'
+  | 'PLAN_NOT_APPLICABLE'
+  | 'KPI_NOT_ASSIGNED'
   | 'HTTP_ERROR'
   | 'INTERNAL_ERROR';
 

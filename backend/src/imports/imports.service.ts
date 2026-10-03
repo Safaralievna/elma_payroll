@@ -7,6 +7,7 @@ import { dateToIso } from '../common/iso-date';
 import { Page } from '../common/schemas';
 import { Prisma } from '../generated/prisma/client';
 import { lastClosedDay } from '../history/history-db';
+import { ensureOpenPeriod } from '../periods/period-db';
 import { PrismaService } from '../prisma/prisma.service';
 import { SheetRow, mapSheet } from './excel/sheet';
 import { readFirstSheet } from './excel/workbook';
@@ -20,6 +21,7 @@ import {
 } from './import.constants';
 import { CLIENTS_IMPORT, PRODUCTS_IMPORT } from './kinds/catalog.import';
 import { EMPLOYEES_IMPORT } from './kinds/employees.import';
+import { KPI_PLANS_IMPORT } from './kinds/kpi-plans.import';
 import { TEAM_LINKS_IMPORT } from './kinds/team-links.import';
 import { Outcome, RowOutcome } from './plans/tracked-history';
 
@@ -28,9 +30,15 @@ export const KINDS: Record<ImportPath, ImportKind> = {
   'team-links': TEAM_LINKS_IMPORT,
   products: PRODUCTS_IMPORT,
   clients: CLIENTS_IMPORT,
+  plans: KPI_PLANS_IMPORT,
 };
 
 const ROW_CHUNK = 1000;
+
+const BATCH_INCLUDE = {
+  importedByUser: { select: { username: true } },
+  period: { select: { year: true, month: true } },
+} satisfies Prisma.ImportBatchInclude;
 
 export interface UploadedFile {
   originalname: string;
@@ -40,6 +48,9 @@ export interface UploadedFile {
 export interface BatchView {
   id: string;
   importType: string;
+  /** Davrga bog'langan importda (PLANS, SALES) — davr; ma'lumotnoma importida null. */
+  year: number | null;
+  month: number | null;
   versionNumber: number;
   status: string;
   fileName: string;
@@ -64,8 +75,16 @@ export interface ImportErrorView {
   message: string;
 }
 
+export interface ImportPeriod {
+  year: number;
+  month: number;
+}
+
 /**
- * Ma'lumotnoma importlari (DECISIONS 4). Davrga bog'lanmaydi (period_id = NULL).
+ * Excel importlari (DECISIONS 4). Ma'lumotnoma importlari davrga bog'lanmaydi (period_id = NULL);
+ * davrga bog'langanlari (`kind.periodic`: PLANS, 7-bosqichda SALES) — `?year=&month=` bilan,
+ * davr ensureOpenPeriod orqali (CLOSED → 409 PERIOD_CLOSED, REVIEW → 409 PERIOD_NOT_OPEN,
+ * yo'q → OPEN yaratiladi); bu xatolarda batch yaratilmaydi. Versiya, file_hash va ACTIVE — davr ichida.
  *
  * - Fayl xatosi (Excel emas, sarlavha, > 50 000 qator) — 400 INVALID_FILE, batch yaratilmaydi.
  * - Bir xil fayl (SHA-256) shu turda bor bo'lsa — 409 FILE_ALREADY_IMPORTED.
@@ -81,8 +100,14 @@ export class ImportsService {
     private readonly audit: AuditService,
   ) {}
 
-  async upload(actor: AuthUser, path: ImportPath, file: UploadedFile | undefined): Promise<ImportResult> {
+  async upload(actor: AuthUser, path: ImportPath, file: UploadedFile | undefined, period: ImportPeriod | null = null): Promise<ImportResult> {
     const kind = KINDS[path];
+    if (kind.periodic && !period) {
+      throw new AppError(HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR', `${path} importi uchun davr majburiy: ?year=&month=`);
+    }
+    if (!kind.periodic && period) {
+      throw new AppError(HttpStatus.BAD_REQUEST, 'VALIDATION_ERROR', `${path} importi davrga bog'lanmaydi — year/month bermang`);
+    }
     if (!file) throw invalidFile('Fayl yuborilmadi ("file" maydoni)');
     // multer fayl nomini latin1 deb o'qiydi — o'zbekcha/kirillcha nomlar buzilmasin.
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8').slice(0, 255);
@@ -100,30 +125,33 @@ export class ImportsService {
     const result = await this.prisma.$transaction(
       async (tx) => {
         // Bir turdagi importlar ketma-ket: versiya raqami va ACTIVE almashuvi to'qnashmasin.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`import:${kind.importType}`}))`;
+        const lockKey = period ? `import:${kind.importType}:${period.year}-${period.month}` : `import:${kind.importType}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+        const openPeriod = period ? await ensureOpenPeriod(tx, this.audit, actor.id, period.year, period.month) : null;
+        const periodId = openPeriod?.id ?? null;
 
-        const duplicate = await tx.importBatch.findFirst({ where: { periodId: null, importType: kind.importType, fileHash } });
+        const duplicate = await tx.importBatch.findFirst({ where: { periodId, importType: kind.importType, fileHash } });
         if (duplicate) throw alreadyImported(duplicate.id, duplicate.status);
 
         const last = await tx.importBatch.aggregate({
-          where: { periodId: null, importType: kind.importType },
+          where: { periodId, importType: kind.importType },
           _max: { versionNumber: true },
         });
         const versionNumber = (last._max.versionNumber ?? 0) + 1;
 
-        const plan = await kind.plan(tx, rows, await lastClosedDay(tx));
+        const plan = await kind.plan(tx, rows, { lastClosedDay: await lastClosedDay(tx), period: openPeriod });
         const errors = collectErrors(plan.outcomes);
         const invalid = errors.length > 0;
 
         if (!invalid) {
           await tx.importBatch.updateMany({
-            where: { periodId: null, importType: kind.importType, status: 'ACTIVE' },
+            where: { periodId, importType: kind.importType, status: 'ACTIVE' },
             data: { status: 'ARCHIVED' },
           });
         }
         const batch = await tx.importBatch.create({
           data: {
-            periodId: null,
+            periodId,
             fileName,
             fileHash,
             importType: kind.importType,
@@ -135,14 +163,14 @@ export class ImportsService {
         await saveRows(tx, batch.id, rows, plan.outcomes);
 
         const audit: AuditEntry[] = [];
-        if (!invalid) await plan.apply(tx, actor.id, audit);
+        if (!invalid) await plan.apply(tx, { actorId: actor.id, batchId: batch.id }, audit);
         const counts = countOutcomes(plan.outcomes);
         audit.push({
           userId: actor.id,
           action: invalid ? 'IMPORT_INVALID' : 'IMPORT_APPLY',
           entityType: 'import_batches',
           entityId: batch.id,
-          newData: { importType: kind.importType, fileName, versionNumber, rowCount: rows.length, errorCount: errors.length, ...counts },
+          newData: { importType: kind.importType, period, fileName, versionNumber, rowCount: rows.length, errorCount: errors.length, ...counts },
         });
         await this.audit.logMany(tx, audit);
         return { batchId: batch.id, errors, counts };
@@ -165,16 +193,16 @@ export class ImportsService {
     return { ...(await this.get(result.batchId)), ...result.counts };
   }
 
-  async list(query: { type?: ImportPath; page: number; pageSize: number }): Promise<Page<BatchView>> {
+  async list(query: { type?: ImportPath; year?: number; month?: number; page: number; pageSize: number }): Promise<Page<BatchView>> {
     const where: Prisma.ImportBatchWhereInput = {
-      periodId: null,
       importType: query.type ? IMPORT_TYPES[query.type] : { in: Object.values(IMPORT_TYPES) },
+      period: query.year || query.month ? { year: query.year, month: query.month } : undefined,
     };
     const [total, batches] = await Promise.all([
       this.prisma.importBatch.count({ where }),
       this.prisma.importBatch.findMany({
         where,
-        include: { importedByUser: { select: { username: true } } },
+        include: BATCH_INCLUDE,
         orderBy: { id: 'desc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
@@ -192,7 +220,7 @@ export class ImportsService {
   async get(id: bigint): Promise<BatchView> {
     const batch = await this.prisma.importBatch.findUnique({
       where: { id },
-      include: { importedByUser: { select: { username: true } } },
+      include: BATCH_INCLUDE,
     });
     if (!batch) throw new AppError(HttpStatus.NOT_FOUND, 'NOT_FOUND', `Import topilmadi (id=${id})`);
     return toBatchView(batch, (await this.rowCounts([id])).get(id));
@@ -311,12 +339,14 @@ function toRawJson(values: SheetRow['values']): Prisma.InputJsonObject {
 }
 
 function toBatchView(
-  batch: Prisma.ImportBatchGetPayload<{ include: { importedByUser: { select: { username: true } } } }>,
+  batch: Prisma.ImportBatchGetPayload<{ include: typeof BATCH_INCLUDE }>,
   counts: { rowCount: number; invalidRowCount: number } | undefined,
 ): BatchView {
   return {
     id: batch.id.toString(),
     importType: batch.importType,
+    year: batch.period?.year ?? null,
+    month: batch.period?.month ?? null,
     versionNumber: batch.versionNumber,
     status: batch.status,
     fileName: batch.fileName,

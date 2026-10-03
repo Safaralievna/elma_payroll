@@ -12,7 +12,7 @@ Har bir bosqich oxirida: `npm test` va `npm run typecheck` xatosiz, so'ng git co
 | 3 | Auth (JWT, argon2), rollar ADMIN/CALCULATOR/APPROVER, audit servisi | ✅ |
 | 4 | Ma'lumotnomalar, xodimlar, lavozim tarixi, maosh tarixi, team_links (CRUD + Excel import) | ✅ |
 | 5 | KPI konstruktor: KPI, qoidalar, pog'onalar, filtrlar, lavozimga biriktirish, override | ✅ |
-| 6 | Plan: qo'lda va Excel'dan | ⏳ |
+| 6 | Plan: qo'lda va Excel'dan | ✅ |
 | 7 | Savdo importi: validatsiya, versiyalar, file_hash, OPEN/CLOSED rejimlari, "nima o'zgardi", o'tgan oy qaytarishlari | ⏳ |
 | 8 | Hisoblash servisi: faktlar → KPI natijalari → payroll (bonus, jarima, avans, depozit, qarz, qayta hisob) | ⏳ |
 | 9 | Davr: OPEN → REVIEW → CLOSED, ikki kishi qoidasi, CLOSED himoyasi | ⏳ |
@@ -119,10 +119,43 @@ Tasdiqlangan qarorlar — `docs/DECISIONS.md` 2.2 (plan turlarida bitta faol qoi
 
 ---
 
+## 6-bosqich — Plan (qo'lda va Excel'dan) ✅
+
+Natija: `npm test` 319/319, `npm run typecheck` xatosiz, `npm run test:db` 149/149 (shundan 6-bosqich E2E 25 + plan shabloni 2), `npm run db:check-drift` — "No difference detected". Migratsiya yo'q (`kpi_plans` CHECK'lari 2-bosqichda bor).
+Tasdiqlangan qarorlar — `docs/DECISIONS.md` 2.6.
+
+1. **Davr** (`src/periods/`): `period-rules.ts` (toza) — `assertPeriodNotClosed` (`assertNotClosed` orqali), `assertPeriodOpen` (REVIEW → `PERIOD_NOT_OPEN`); `period-db.ts` — `ensureOpenPeriod(tx, audit, actorId, year, month)`: assertNotClosed → `INSERT ... ON CONFLICT (year, month) DO NOTHING` (+ `PERIOD_CREATE`) → `FOR SHARE` → OPEN tekshiruvi. 7-bosqich savdo importi ham shuni chaqiradi.
+2. **Plan qoidalari** (`src/kpi-plans/plan-rules.ts`, toza): `planShapeFor` (yadrodagi `requiresPlan` orqali), `checkPlanFields`, `validatePlanValues`, `samePlanValues` (Decimal), `findMissingPlans`. Son chegaralari — `src/common/decimal-limits.ts` (`decimalProblem`), API va Excel uchun bitta.
+3. **Endpointlar** (o'qish — hamma rol, yozish — CALCULATOR): `GET /kpi-plans?year=&month=&employeeCode=&kpiId=&source=`, `GET /kpi-plans/missing?year=&month=`; `GET/POST /employees/:code/kpi-plans`, `PATCH/DELETE /employees/:code/kpi-plans/:id`. Xatolar: `PLAN_EXISTS`, `INVALID_PLAN` (details: `{path, message}[]`), `PLAN_NOT_APPLICABLE`, `KPI_NOT_ASSIGNED`, `PERIOD_CLOSED`, `PERIOD_NOT_OPEN`, `NO_CHANGE`.
+4. **Excel**: `POST /imports/plans?year=&month=`, shablon `GET /imports/templates/plans` (`docs/templates/plans-shablon.xlsx`). Ustunlar: `xodim_kodi`, `kpi_kodi`, `plan`, `baza_summa`, `qolda_summa`. `ImportKind` ga `periodic` va davr konteksti (`ImportContext.period`), `apply` ga `ApplyContext { actorId, batchId }` qo'shildi — SALES (7-bosqich) ham shu interfeysga tushadi. Rejalashtirish — `imports/plans/kpi-plans.plan.ts` (toza). Import ro'yxatida `year`, `month`.
+5. Excel'dan son: `RowReader.decimal(field, options, limits)` — katakchaning haqiqiy qiymati (format emas); `money` shu funksiya orqali.
+6. Amaldagi KPI'larni bazadan yuklash — `src/kpis/effective-kpis-db.ts` (`loadEffectiveKpis` ko'p xodim uchun; `GET /employees/:code/kpis` ham shuni ishlatadi). 8-bosqich ham shuni chaqiradi.
+7. Audit: `PERIOD_CREATE`, `PLAN_CREATE`, `PLAN_UPDATE`, `PLAN_DELETE` — shu tranzaksiyada.
+8. Testlar: `src/periods/__tests__/`, `src/kpi-plans/__tests__/`, `src/imports/__tests__/kpi-plans.plan.spec.ts`, `excel.spec.ts` (formatlangan katakchalar); `test/db/kpi-plans.db-spec.ts` — o'zi yaratgan hamma narsani `afterAll` da o'chiradi (ish oylari 2030-yilda; 2025-12 dan keyingi oy CLOSED qilinmaydi).
+
+---
+
+## 7-bosqich — eslatmalar (boshlanganda rejaga kiritiladi)
+
+- Davr: `ensureOpenPeriod` (`src/periods/period-db.ts`) — savdo importi ham shuni ishlatadi; `ImportKind.periodic = true`.
+- **Planlar uchun CLOSED davrda solishtirish rejimi** (`COMPARISON`, DECISIONS 4): hozir PLANS importi CLOSED davrga 409 `PERIOD_CLOSED` qaytaradi; savdo importidagi "nima o'zgardi" ekrani bilan birga planlarga ham qo'llash.
+
+---
+
 ## 8-bosqich — eslatmalar (boshlanganda rejaga kiritiladi)
+
+- **Plan yo'q bo'lsa** (DECISIONS 2.1, 2.6): butun hisob to'xtaydimi yoki faqat shu xodim — hal qilish (team lead bilan). `findMissingPlans` / `GET /kpi-plans/missing` tayyor.
+- **Plan o'zgarsa "natija eskirgan" belgisi**: hisoblangandan keyin plan (qo'lda yoki import) o'zgarsa, natijani qayta hisoblash kerakligini ko'rsatish. Hozir faqat audit.
 
 - **Oy o'rtasida ishga kirgan/ketgan xodim** (`docs/DECISIONS.md` 3.4):
   - `fixed_salary_overrides` jadvali — Prisma sxemasi + migratsiya (CHECK `amount >= 0`, unique `(period_id, employee_id)`, FK'lar);
   - `PARTIAL_MONTH` warning — `hire_date` yoki `termination_date` shu oy ichida bo'lsa `payrolls.warnings` ga;
   - fiks summani tahrirlash endpointi: CALCULATOR, sabab majburiy, CLOSED davrda — 409 `PERIOD_CLOSED`, audit (eski/yangi summa) tranzaksiya ichida; qayta hisoblashda qo'lda kiritilgan summa saqlanadi.
 - Filtrlarda raqamli solishtirish — `decimal.js` orqali (`docs/DECISIONS.md` 2.5).
+
+---
+
+## 9-bosqich — eslatmalar (boshlanganda rejaga kiritiladi)
+
+- **REVIEW oyda tarix bloklanadimi**: lavozim/maosh tarixi, `team_links`, KPI biriktirish (`position_kpis`) va override'lar hozir faqat CLOSED davrdan himoyalangan (`assertNotClosed`). Plan esa REVIEW'da ham bloklanadi (`PERIOD_NOT_OPEN`). Ular ham REVIEW oyda bloklanadimi — hal qilish (team lead bilan).
+- Davrni yopish (`FOR UPDATE`) — plan yozuvi `ensureOpenPeriod` dagi `FOR SHARE` qulfi bilan to'qnashmasligi uchun shu qatorni qulflaydi.

@@ -1,4 +1,5 @@
 import { Decimal } from '../../calculation/decimal';
+import { decimalProblem, DecimalLimits, MONEY_LIMITS } from '../../common/decimal-limits';
 import { dateToIso, isIsoDate } from '../../common/iso-date';
 import { isBlank } from './sheet';
 import { SheetCell } from './workbook';
@@ -6,9 +7,6 @@ import { SheetCell } from './workbook';
 interface FieldOptions {
   required: boolean;
 }
-
-/** Decimal(18,2): butun qismi ko'pi bilan 16 xona. */
-const MONEY_MAX = new Decimal('1e16');
 
 /**
  * Bitta qatorning katakchalarini turga o'giradi. Xato bo'lsa — `null` qaytaradi va
@@ -54,21 +52,28 @@ export class RowReader {
     return this.fail(field, "Sana noto'g'ri — Excel sanasi, YYYY-MM-DD yoki DD.MM.YYYY bo'lishi kerak");
   }
 
-  /** Pul summasi: ≥ 0, ko'pi bilan 2 kasr belgisi. Matnda bo'shliqlar (minglik ajratgich) va vergul ruxsat. */
+  /** Pul summasi: ≥ 0, ko'pi bilan 2 kasr belgisi, decimal(18,2) ga sig'adi. */
   money(field: string, options: FieldOptions): Decimal | null {
+    return this.decimal(field, options, MONEY_LIMITS);
+  }
+
+  /**
+   * Son katakchasi → Decimal, `limits` bo'yicha tekshirilgan (`decimalProblem`, API bilan bir xil).
+   * Katakchaning ko'rinadigan matni (format: "1 500 000", yaxlitlab ko'rsatish) emas, haqiqiy
+   * qiymati o'qiladi. Matn katakchada bo'shliqlar (minglik ajratgich) va kasr verguli ruxsat.
+   */
+  decimal(field: string, options: FieldOptions, limits: DecimalLimits): Decimal | null {
     const cell = this.cell(field, options);
     if (cell === null) return null;
     let text: string;
     if (typeof cell === 'number' && Number.isFinite(cell)) text = String(cell);
-    else if (typeof cell === 'string') text = cell.replace(/[\s  ]/g, '').replace(',', '.');
+    else if (typeof cell === 'string') text = cell.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
     else return this.fail(field, "Son bo'lishi kerak");
 
     if (!/^-?\d+(\.\d+)?(e[+-]?\d+)?$/i.test(text)) return this.fail(field, "Son bo'lishi kerak");
     const value = new Decimal(text);
-    if (value.isNegative()) return this.fail(field, "Manfiy bo'lmasligi kerak");
-    if (value.decimalPlaces() > 2) return this.fail(field, "Ko'pi bilan 2 kasr belgisi bo'lishi mumkin");
-    if (value.greaterThanOrEqualTo(MONEY_MAX)) return this.fail(field, 'Summa juda katta');
-    return value;
+    const problem = decimalProblem(value, limits);
+    return problem ? this.fail(field, problem) : value;
   }
 
   /** Ruxsat etilgan qiymatlardan biri (katta-kichik harfga sezgir emas). */

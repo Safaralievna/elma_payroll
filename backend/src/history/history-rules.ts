@@ -36,6 +36,7 @@ export type HistoryErrorCode =
   | 'HISTORY_OVERLAP'
   | 'HISTORY_ORDER'
   | 'PERIOD_CLOSED'
+  | 'PERIOD_NOT_OPEN'
   | 'INVALID_DATE_RANGE'
   | 'NOT_LAST_RECORD'
   | 'NO_CHANGE';

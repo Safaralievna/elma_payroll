@@ -76,6 +76,27 @@ Texnik qarorlar (tasdiqlandi, 2026-10-02):
   - **Eslatma (8-bosqich):** yadro raqamli solishtirishni `decimal.js` orqali bajarishi kerak, matn sifatida emas (`"100.00"` va `"100"` — bir xil son).
 - **`fact_source = MANUAL`** (fakt qo'lda kiritiladi): `aggregation` va `source_field` bo'sh, qoidalarda filtr yo'q — savdo qatorlari ishlatilmaydi. MANUAL hisoblash turidagi KPI'da fact_source ham MANUAL bo'ladi.
 
+### 2.6 Oylik plan (team lead tasdiqladi, 2026-10-03)
+
+- Planni **CALCULATOR** kiritadi (qo'lda yoki Excel'dan); o'qish — hamma rol. Kalit: `(davr, xodim, KPI)` — bitta yozuv.
+- Maydonlar KPI turiga bog'liq ("plan kerakmi" — yadrodagi `requiresPlan`):
+
+  | Tur | `plan_value` | `base_amount` | `manual_amount` |
+  |-----|--------------|---------------|-----------------|
+  | STEP, LINEAR | majburiy, > 0 | majburiy, ≥ 0 (**0 ruxsat**) | kiritilmaydi |
+  | FIXED (`min_achievement` bilan) | majburiy, > 0 | kiritilmaydi (summa qoidada) | kiritilmaydi |
+  | MANUAL | kiritilmaydi | kiritilmaydi | majburiy, ≥ 0 |
+  | RESULT_PERCENTAGE, PER_UNIT, shartsiz FIXED | plan yozuvi qabul qilinmaydi — 400 `PLAN_NOT_APPLICABLE` | | |
+
+  Majburiy maydon yo'q yoki ortiqcha maydon bor — 400 `INVALID_PLAN` (hamma xatolar birga). Sonlar `decimal.js` bilan: `plan_value` ko'pi bilan 4 kasr, summalar 2 kasr; ortiqcha kasr **xato**, jim yaxlitlanmaydi. API'da son faqat satr (`"1500000.50"`, `"1e5"` emas). Excel'da katakchaning ko'rinadigan matni emas, **haqiqiy qiymati** o'qiladi (format "1 500 000" yoki yaxlitlab ko'rsatish ta'sir qilmaydi).
+- KPI shu oyda xodimga biriktirilgan bo'lishi kerak (lavozimi yoki ADD, 2.5) — aks holda 400 `KPI_NOT_ASSIGNED`. KPI nofaol — 409 `REFERENCE_INACTIVE`.
+- **Davr:** plan faqat **OPEN** davrga yoziladi. Oy oxirgi CLOSED davrgacha bo'lsa — 409 `PERIOD_CLOSED` (tarix bilan umumiy `assertNotClosed`); davr REVIEW holatida — 409 `PERIOD_NOT_OPEN` (tuzatish uchun avval OPEN ga qaytariladi). Davr hali yo'q oy — **OPEN davr avtomatik yaratiladi**, auditga `PERIOD_CREATE`. Buni bitta umumiy funksiya bajaradi (`ensureOpenPeriod`, `src/periods/`; 7-bosqich savdo importi ham shuni ishlatadi): avval `assertNotClosed`, keyin yaratish (`ON CONFLICT (year, month) DO NOTHING` — parallel so'rovlarda davr va audit bitta), so'ng davr qatori `FOR SHARE` bilan qulflanadi.
+- Qo'lda: yaratish (allaqachon bor — 409 `PLAN_EXISTS`), tahrirlash (o'zgarish yo'q — 409 `NO_CHANGE`, 4/5-bosqichdagidek), o'chirish. Qo'lda tahrirlangan import plani — manbasi qo'lda bo'ladi (`import_batch_id = NULL`).
+- **Excel (PLANS importi):** bitta fayl — bitta davr (`?year=&month=`). Versiya, `file_hash` va bitta ACTIVE — shu davr ichida. Import **faqat qo'shadi yoki yangilaydi**: faylda yo'q planlar (qo'lda kiritilganlari ham) o'chirilmaydi va o'zgarmaydi. Bir xil qiymat — o'zgartirilmaydi. Fayl ichida bir xil xodim + KPI ikki marta — ikkala qatorga xato. **CLOSED davrga import — 409 `PERIOD_CLOSED`, batch yaratilmaydi** (planlar uchun solishtirish rejimi — 7-bosqichda).
+- Audit — shu tranzaksiya ichida: `PLAN_CREATE`, `PLAN_UPDATE` (eski/yangi), `PLAN_DELETE`; importda har bir o'zgargan plan uchun ham.
+- Plan yo'qligi: `GET /kpi-plans/missing` — plan talab qiladigan, lekin kiritilmagan (yoki chala) planlar ro'yxati. Hisoblashda plan yo'q — validatsiya xatosi (2.1); butun hisob to'xtaydimi yoki faqat shu xodim — 8-bosqichda hal qilinadi.
+- Hisoblangandan keyin plan o'zgarsa — hozircha faqat audit; "natija eskirgan" belgisi — 8-bosqichda.
+
 ## 3. Ish haqi (payroll)
 
 ```
@@ -132,7 +153,8 @@ Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depoz
 - Batch statuslari (texnik qaror): `ACTIVE`, `ARCHIVED`, `INVALID`, `COMPARISON`.
 - Bitta `(period_id, import_type)` da faqat bitta ACTIVE — partial unique index.
 - **OPEN davr**: yaroqli yangi versiya ACTIVE bo'ladi, eskisi ARCHIVED; so'ng "nima o'zgardi" ekrani: xodim | eski | yangi | farq.
-- **CLOSED davr**: faqat solishtirish (`COMPARISON`). Farq ko'rsatiladi, ACTIVE almashmaydi, hech narsa qayta hisoblanmaydi.
+- **CLOSED davr**: faqat solishtirish (`COMPARISON`). Farq ko'rsatiladi, ACTIVE almashmaydi, hech narsa qayta hisoblanmaydi. (PLANS uchun hozircha 409 `PERIOD_CLOSED` — solishtirish rejimi 7-bosqichda, 2.6.)
+- **REVIEW davr**: davrga bog'langan importda yozish yo'q — 409 `PERIOD_NOT_OPEN` (2.6; umumiy `ensureOpenPeriod` orqali, 7-bosqich savdo importi ham).
 - `kpi_plans.import_batch_id` — nullable (qo'lda kiritilsa NULL).
 - Ma'lumotnomalar (mahsulot, mijoz, narx turi) savdo importidan oldin tizimda bo'lishi kerak.
 

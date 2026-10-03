@@ -1,6 +1,6 @@
 import { AuditEntry } from '../../audit/audit.service';
 import { SheetRow } from '../excel/sheet';
-import { ImportKind, ImportType, Tx } from '../import-kind';
+import { ApplyContext, ImportKind, ImportType, Tx } from '../import-kind';
 import {
   CatalogImportContext,
   CatalogItemState,
@@ -72,6 +72,7 @@ function catalogImport(spec: CatalogTable): ImportKind {
   return {
     importType: spec.importType,
     columns: spec.importType === 'PRODUCTS' ? PRODUCT_COLUMNS : CLIENT_COLUMNS,
+    periodic: false,
 
     async plan(tx, rows) {
       const items = await spec.loadItems(tx, rowCodes(rows, spec.codeColumn));
@@ -99,7 +100,7 @@ function catalogImport(spec: CatalogTable): ImportKind {
 
       return {
         outcomes,
-        async apply(db: Tx, actorId: bigint, audit: AuditEntry[]) {
+        async apply(db: Tx, { actorId }: ApplyContext, audit: AuditEntry[]) {
           const states = [...ctx.items.values()];
           const created = states.filter((item) => item.id === null);
           for (let start = 0; start < created.length; start += CREATE_CHUNK) {

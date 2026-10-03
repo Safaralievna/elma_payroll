@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { AuthUser } from '../auth/auth.types';
 import { CurrentUser, Roles } from '../auth/decorators';
 import { AppError } from '../common/app-error';
-import { Page, paginationShape } from '../common/schemas';
+import { Page, paginationShape, yearMonthShape } from '../common/schemas';
 import { idParamSchema, ZodValidationPipe } from '../common/zod-validation.pipe';
 import { IMPORT_TYPES, ImportPath } from './import-kind';
 import { IMPORT_MAX_FILE_BYTES } from './import.constants';
@@ -34,7 +34,16 @@ class ImportPathPipe implements PipeTransform<string, ImportPath> {
   }
 }
 
-const listSchema = z.strictObject({ type: z.enum(IMPORT_PATHS).optional(), ...paginationShape });
+const listSchema = z.strictObject({
+  type: z.enum(IMPORT_PATHS).optional(),
+  year: yearMonthShape.year.optional(),
+  month: yearMonthShape.month.optional(),
+  ...paginationShape,
+});
+/** Davrga bog'langan import (plans, keyin sales) uchun majburiy — servis tekshiradi; ma'lumotnoma importida berilmaydi. */
+const uploadQuerySchema = z
+  .strictObject({ year: yearMonthShape.year.optional(), month: yearMonthShape.month.optional() })
+  .refine((value) => (value.year === undefined) === (value.month === undefined), { message: 'year va month birga beriladi' });
 const pageSchema = z.strictObject(paginationShape);
 const idPipe = new ZodValidationPipe(idParamSchema);
 
@@ -69,7 +78,7 @@ export class ImportsController {
     return this.imports.errors(id, query.page, query.pageSize);
   }
 
-  /** multipart/form-data, maydon nomi "file", bitta .xlsx. */
+  /** multipart/form-data, maydon nomi "file", bitta .xlsx. Plan: POST /imports/plans?year=2026&month=3. */
   @Post(':type')
   @Roles('CALCULATOR')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: IMPORT_MAX_FILE_BYTES, files: 1 } }))
@@ -77,7 +86,9 @@ export class ImportsController {
     @CurrentUser() actor: AuthUser,
     @Param('type', ImportPathPipe) type: ImportPath,
     @UploadedFile() file: ImportFile | undefined,
+    @Query(new ZodValidationPipe(uploadQuerySchema)) query: z.output<typeof uploadQuerySchema>,
   ): Promise<ImportResult> {
-    return this.imports.upload(actor, type, file);
+    const period = query.year !== undefined && query.month !== undefined ? { year: query.year, month: query.month } : null;
+    return this.imports.upload(actor, type, file, period);
   }
 }

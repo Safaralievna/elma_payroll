@@ -6,7 +6,8 @@ import { dateOrNull, dateToIso, isoToDate } from '../common/iso-date';
 import { Prisma } from '../generated/prisma/client';
 import { lastClosedDay, requireActive, requireEmployee, runRule } from '../history/history-db';
 import { PrismaService } from '../prisma/prisma.service';
-import { EffectiveKpiSource, resolveEmployeeKpis } from './effective-kpis';
+import { EffectiveKpiSource } from './effective-kpis';
+import { loadEffectiveKpis } from './effective-kpis-db';
 import { DatedRange, planKpiLinkCreate, planKpiLinkDelete, planKpiLinkEnd } from './kpi-dates';
 import {
   OVERRIDE_INCLUDE,
@@ -228,30 +229,7 @@ export class KpiLinksService {
 
   async effectiveKpis(code: string, query: EffectiveKpisQuery): Promise<EffectiveKpisView> {
     const employee = await requireEmployee(this.prisma, code);
-    const [assignments, overrides] = await Promise.all([
-      this.prisma.employeeAssignment.findMany({ where: { employeeId: employee.id } }),
-      this.prisma.employeeKpiOverride.findMany({ where: { employeeId: employee.id } }),
-    ]);
-    const positionIds = [...new Set(assignments.map((assignment) => assignment.positionId))];
-    const positionKpis = await this.prisma.positionKpi.findMany({ where: { positionId: { in: positionIds } } });
-
-    const result = resolveEmployeeKpis({
-      year: query.year,
-      month: query.month,
-      assignments: assignments.map((row) => ({ positionId: row.positionId.toString(), ...datesOf(row) })),
-      positionKpis: positionKpis.map((row) => ({
-        positionId: row.positionId.toString(),
-        kpiId: row.kpiId.toString(),
-        isActive: row.isActive,
-        ...datesOf(row),
-      })),
-      overrides: overrides.map((row) => ({
-        kpiId: row.kpiId.toString(),
-        action: row.action as 'ADD' | 'REMOVE',
-        isActive: row.isActive,
-        ...datesOf(row),
-      })),
-    });
+    const result = (await loadEffectiveKpis(this.prisma, [employee.id], query.year, query.month)).get(employee.id.toString())!;
 
     const ids = [...result.kpis.map((kpi) => kpi.kpiId), ...result.removed].map((id) => BigInt(id));
     const definitions = await this.prisma.kpiDefinition.findMany({

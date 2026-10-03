@@ -155,6 +155,51 @@ describe('RowReader — katakchalarni turga o\'girish va xatolarni to\'plash', (
     expect(reader.errors.map((error) => error.field)).toEqual(['d', 'e', 'f', 'g']);
   });
 
+  it('decimal: chegaralar parametr bilan (plan — 4 kasr, > 0); summa bilan bir xil o\'qish', () => {
+    const plan = { scale: 4, integerDigits: 14, positive: true };
+    const reader = new RowReader({ a: 150000000.25, b: '1 500 000,1234', c: 0, d: '12.34567', e: 'yuz', f: 1e14 });
+    expect(reader.decimal('a', { required: true }, plan)?.toString()).toBe('150000000.25');
+    expect(reader.decimal('b', { required: true }, plan)?.toString()).toBe('1500000.1234');
+    expect(reader.decimal('c', { required: true }, plan)).toBeNull();
+    expect(reader.decimal('d', { required: true }, plan)).toBeNull();
+    expect(reader.decimal('e', { required: true }, plan)).toBeNull();
+    expect(reader.decimal('f', { required: true }, plan)).toBeNull();
+    expect(reader.decimal('yoq', { required: false }, plan)).toBeNull();
+    expect(reader.errors).toEqual([
+      { field: 'c', message: "0 dan katta bo'lishi kerak" },
+      { field: 'd', message: "Ko'pi bilan 4 kasr belgisi bo'lishi mumkin" },
+      { field: 'e', message: "Son bo'lishi kerak" },
+      { field: 'f', message: 'Son juda katta' },
+    ]);
+  });
+
+  it('formatlangan katakcha: ko\'rinadigan matn emas, haqiqiy qiymat o\'qiladi', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Plan');
+    sheet.addRow(['bo_shliqli', 'yaxlitlangan', 'kasr_yashirin', 'matn_bo_shliqli', 'matn_nbsp']);
+    const row = sheet.addRow([1500000.4, 2500000.75, 1234.56789, '1 500 000', '2 000 000,5']);
+    row.getCell(1).numFmt = '# ##0'; // Excel'da "1 500 000" bo'lib ko'rinadi
+    row.getCell(2).numFmt = '#,##0'; // "2,500,001" bo'lib ko'rinadi (yaxlitlab)
+    row.getCell(3).numFmt = '0.00'; // "1234.57" bo'lib ko'rinadi
+    const [, data] = await readFirstSheet(Buffer.from(await workbook.xlsx.writeBuffer()));
+    const reader = new RowReader({
+      a: data!.cells[0]!,
+      b: data!.cells[1]!,
+      c: data!.cells[2]!,
+      d: data!.cells[3]!,
+      e: data!.cells[4]!,
+    });
+    const plan = { scale: 4, integerDigits: 14, positive: true };
+
+    expect(reader.decimal('a', { required: true }, plan)?.toString()).toBe('1500000.4');
+    expect(reader.money('b', { required: true })?.toFixed(2)).toBe('2500000.75');
+    // Ko'rinishdagi 1234.57 emas — haqiqiy 1234.56789; 4 kasrdan ko'p, jim yaxlitlanmaydi.
+    expect(reader.decimal('c', { required: true }, plan)).toBeNull();
+    expect(reader.decimal('d', { required: true }, plan)?.toString()).toBe('1500000');
+    expect(reader.money('e', { required: true })?.toFixed(2)).toBe('2000000.50');
+    expect(reader.errors).toEqual([{ field: 'c', message: "Ko'pi bilan 4 kasr belgisi bo'lishi mumkin" }]);
+  });
+
   it('oneOf: katta-kichik harfga sezgir emas', () => {
     const reader = new RowReader({ a: 'supervisor', b: 'BOSS' });
     expect(reader.oneOf('a', ['SUPERVISOR', 'OPERATOR'], { required: true })).toBe('SUPERVISOR');
