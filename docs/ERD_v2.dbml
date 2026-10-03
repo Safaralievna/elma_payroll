@@ -696,7 +696,8 @@ Table payrolls {
   // [v2] YANGI. payable = max(net, 0). CHECK: payable_amount >= 0
   payable_amount decimal(18,2) [not null]
 
-  // [v2] Masalan ["NEGATIVE_NET_AMOUNT"]
+  // [v2] Masalan ["NEGATIVE_NET_AMOUNT", "PARTIAL_MONTH"]
+  // PARTIAL_MONTH — hire_date yoki termination_date shu oy ichida (DECISIONS 3.4)
   warnings jsonb
 
   created_at timestamp [not null, default: `now()`]
@@ -747,6 +748,33 @@ Table payroll_payments {
   }
 }
 
+
+// [v2] YANGI — oy uchun fiks summani qo'lda belgilash (DECISIONS 3.4).
+// Oy o'rtasida ishga kirgan/ketgan xodim: fiks oylik avtomatik bo'linmaydi,
+// CALCULATOR shu davr uchun summani qo'lda kiritadi. Yozuv bo'lsa — payrolls.fixed_salary
+// shu summadan olinadi; qayta hisoblashda ustidan yozilmaydi.
+// Prisma va migratsiya — 8-bosqichda.
+Table fixed_salary_overrides {
+  id bigint [pk, increment]
+
+  period_id bigint [not null]
+  employee_id bigint [not null]
+
+  // CHECK: amount >= 0
+  amount decimal(18,2) [not null]
+
+  // Majburiy: nega fiks summa o'zgartirildi
+  reason text [not null]
+
+  created_by bigint [not null]
+
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    (period_id, employee_id) [unique]
+  }
+}
 
 // ======================================================
 // 14. BONUS / PENALTY / ADVANCE  (v1 dagi kabi — alohida jadvallar)
@@ -1000,6 +1028,9 @@ Ref: payrolls.period_id > payroll_periods.id
 Ref: payrolls.employee_id > employees.id
 Ref: payroll_items.payroll_id > payrolls.id
 Ref: payroll_payments.payroll_id > payrolls.id
+Ref: fixed_salary_overrides.period_id > payroll_periods.id
+Ref: fixed_salary_overrides.employee_id > employees.id
+Ref: fixed_salary_overrides.created_by > users.id
 
 // BONUS / PENALTY / ADVANCE
 Ref: bonuses.employee_id > employees.id

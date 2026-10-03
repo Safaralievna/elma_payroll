@@ -91,7 +91,7 @@ Amalga oshirildi:
 ## 4-bosqich — Ma'lumotnomalar, xodimlar, tarix, team_links, import ✅
 
 Natija: `npm test` 205/205, `npm run typecheck` xatosiz, `npm run test:db` 90/90 (shundan 4-bosqich E2E 35), `npm run db:check-drift` — "No difference detected".
-Tasdiqlangan qarorlar — `docs/DECISIONS.md` 4.0 va 4.0.1; ochiq savol (oy o'rtasidagi fiks oylik) — 7-bo'lim.
+Tasdiqlangan qarorlar — `docs/DECISIONS.md` 4.0 va 4.0.1; oy o'rtasidagi fiks oylik — 3.4 (hal qilindi).
 
 1. **Ma'lumotnomalar** (`src/reference/`): departments, positions (`depositPercent`), product-groups, products, client-categories, clients, price-types — bitta konfiguratsiya (`reference.resources.ts`) + umumiy servis/kontroller. GET (filtr `search`, `isActive`, sahifalash), POST, PATCH; DELETE yo'q. API'da `code` majburiy (importlar kod bo'yicha bog'laydi). Ota yozuv yo'q — 404 `REFERENCE_NOT_FOUND`, nofaol — 409 `REFERENCE_INACTIVE`, band kod — 409 `CODE_TAKEN`.
 2. **Tarix qoidalari** (`src/history/history-rules.ts`) — toza funksiyalar: `planAppend`, `planUpdateLast`, `planDeleteLast`, `planTermination`. Xatolar: `START_NOT_MONTH_START`, `INVALID_DATE_RANGE` (400); `HISTORY_ORDER`, `NOT_LAST_RECORD`, `PERIOD_CLOSED`, `NO_CHANGE` (409). Oxirgi CLOSED davr — `history-db.ts: lastClosedDay`.
@@ -116,3 +116,13 @@ Tasdiqlangan qarorlar — `docs/DECISIONS.md` 2.2 (plan turlarida bitta faol qoi
 5. Natijasi bor KPI'ning tuzilmasi o'zgarmaydi va ochiq biriktirishi bor KPI nofaol qilinmaydi — 409 `KPI_IN_USE`; natijasi bor qoida o'chirilmaydi — 409 `RULE_IN_USE`. Har bir yozish KPI qatorini `FOR UPDATE` bilan qulflab, tranzaksiyada.
 6. Audit amallari: `KPI_CREATE`, `KPI_UPDATE`, `KPI_RULE_CREATE/UPDATE/DELETE`; biriktirish va override — `HISTORY_*` (`entity_type` = `position_kpis` / `employee_kpi_overrides`); birliklar — `REFERENCE_*`.
 7. Testlar: `src/kpis/__tests__/` — validatsiya, resolver, sanalar va Excel tuzilishiga moslik (Savdo vakili qatorlari — alohida STEP KPI'lar, jami 2 325 297; Ekspeditor — "Savdodan %" 4 100 000 va "Logo salfetka" 5 000 000); `test/db/kpis.db-spec.ts` — E2E.
+
+---
+
+## 8-bosqich — eslatmalar (boshlanganda rejaga kiritiladi)
+
+- **Oy o'rtasida ishga kirgan/ketgan xodim** (`docs/DECISIONS.md` 3.4):
+  - `fixed_salary_overrides` jadvali — Prisma sxemasi + migratsiya (CHECK `amount >= 0`, unique `(period_id, employee_id)`, FK'lar);
+  - `PARTIAL_MONTH` warning — `hire_date` yoki `termination_date` shu oy ichida bo'lsa `payrolls.warnings` ga;
+  - fiks summani tahrirlash endpointi: CALCULATOR, sabab majburiy, CLOSED davrda — 409 `PERIOD_CLOSED`, audit (eski/yangi summa) tranzaksiya ichida; qayta hisoblashda qo'lda kiritilgan summa saqlanadi.
+- Filtrlarda raqamli solishtirish — `decimal.js` orqali (`docs/DECISIONS.md` 2.5).

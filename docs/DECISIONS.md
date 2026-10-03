@@ -114,6 +114,15 @@ Tekshiruv: KPI 6 740 000, jarima 300 000, avans 1 000 000, depozit 10% → depoz
 - Talabnoma = naqd summalar ro'yxati (xodim, summa, jami) → Excel. Vedomost → Excel.
 - Bank importi va solishtirish — MVP'dan keyin.
 
+### 3.4 Oy o'rtasida ishga kirgan / ketgan xodim (team lead tasdiqladi, 2026-10-03)
+
+- **Fiks oylik avtomatik bo'linmaydi.** Tizim standart holatda to'liq okladni (`employee_salary_history`) qo'yadi.
+- `hire_date` yoki `termination_date` shu oy ichida bo'lsa — `payrolls.warnings` ga **`PARTIAL_MONTH`**: "Xodim oyni to'liq ishlamagan, fiks summani tekshiring".
+- **CALCULATOR** shu oy uchun fiks summani qo'lda o'zgartiradi, **sabab majburiy** — `fixed_salary_overrides (period_id, employee_id, amount ≥ 0, reason, created_by)`, unique `(period_id, employee_id)`. Qayta hisoblashda qo'lda kiritilgan summa saqlanadi (ustidan yozilmaydi).
+- O'zgarish audit'ga yoziladi (eski summa, yangi summa, kim, qachon) — shu tranzaksiya ichida. CLOSED davrda o'zgartirib bo'lmaydi — `PERIOD_CLOSED`.
+- **KPI ham bo'linmaydi:** yangi xodimga plan va baza summa qo'lda moslab kiritiladi.
+- Ish kunlari kalendari yo'q.
+
 ## 4. Import
 
 - Turlar: SALES, PLANS, EMPLOYEES (va ma'lumotnomalar).
@@ -177,6 +186,7 @@ Qo'shiladi:
 - `sales_lines.original_sale_date` (nullable)
 - `kpi_definitions.team_link_type` (nullable; scope = TEAM bo'lsa majburiy)
 - `payrolls.debt_carryover_amount`, `payrolls.deposit_return_amount`, `payrolls.payable_amount`
+- `fixed_salary_overrides (id, period_id, employee_id, amount, reason, created_by, created_at, updated_at)` — 3.4 (2026-10-03; Prisma va migratsiya 8-bosqichda)
 
 O'zgaradi / olib tashlanadi:
 - `employee_assignments.manager_id` — olib tashlanadi (`team_links` bilan almashtirildi)
@@ -196,7 +206,7 @@ Migratsiyadagi cheklovlar:
 
 ## 7. Ochiq savollar
 
-- **Oy o'rtasida ishga kirgan/ketgan xodimning fiks oyligi kunlarga bo'linadimi?** — 8-bosqichdan oldin team leaddan so'raladi. (Maosh o'zgarishi faqat oyning 1-kunidan, lekin ishga kirish/ketish sanasi istalgan kun.)
+- ~~Oy o'rtasida ishga kirgan/ketgan xodimning fiks oyligi kunlarga bo'linadimi?~~ — hal qilindi: bo'linmaydi, qo'lda tuzatiladi (3.4).
 
 ## 8. MVP chegarasi
 

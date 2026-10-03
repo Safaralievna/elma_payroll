@@ -14,6 +14,7 @@ let prisma: PrismaService;
 let calc: string;
 let approver: string;
 let admin: string;
+let adminUserId: bigint;
 let unit: { id: string; code: string };
 let inactiveUnit: { id: string };
 let product: { id: string };
@@ -36,7 +37,8 @@ beforeAll(async () => {
   await ensureRoles(prisma);
   calc = await tokenFor(app, (await createUser(prisma, { roles: ['CALCULATOR'] })).id);
   approver = await tokenFor(app, (await createUser(prisma, { roles: ['APPROVER'] })).id);
-  admin = await tokenFor(app, (await createUser(prisma, { roles: ['ADMIN'] })).id);
+  adminUserId = (await createUser(prisma, { roles: ['ADMIN'] })).id;
+  admin = await tokenFor(app, adminUserId);
 
   const unitCode = uniqueName('U').slice(0, 30);
   unit = { id: (await prisma.kpiUnit.create({ data: { code: unitCode, name: "So'm" } })).id.toString(), code: unitCode };
@@ -66,6 +68,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // auth.db-spec.ts (LAST_ADMIN) bazada yagona faol ADMIN bo'lishini kutadi — fayllar tartibi har xil.
+  await prisma.user.update({ where: { id: adminUserId }, data: { isActive: false } });
   await app.close();
 });
 
