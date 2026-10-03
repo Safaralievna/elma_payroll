@@ -284,10 +284,8 @@ async function requireUnit(tx: Tx, unitId: bigint): Promise<void> {
 
 /** KPI nofaol qilinishidan oldin uning ochiq (end_date bo'sh) biriktirishlari yopilgan bo'lishi kerak. */
 async function ensureNoOpenLinks(tx: Tx, kpiId: bigint): Promise<void> {
-  const [positions, overrides] = await Promise.all([
-    tx.positionKpi.count({ where: { kpiId, endDate: null } }),
-    tx.employeeKpiOverride.count({ where: { kpiId, endDate: null } }),
-  ]);
+  const positions = await tx.positionKpi.count({ where: { kpiId, endDate: null } });
+  const overrides = await tx.employeeKpiOverride.count({ where: { kpiId, endDate: null } });
   if (positions + overrides > 0) {
     throw new AppError(
       HttpStatus.CONFLICT,

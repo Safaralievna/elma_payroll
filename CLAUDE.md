@@ -37,6 +37,7 @@ Baza sxemasi: **`docs/ERD_v2.dbml`** — jadvallar, ustunlar va cheklovlar uchun
 8. Xodim faqat `employee_id` (biznes kodi) orqali aniqlanadi, ism bo'yicha hech qachon.
 9. Prisma: `employees.employee_id` (varchar biznes kodi) Prisma'da `employeeCode @map("employee_id")` deb nomlanadi — boshqa jadvallardagi `employee_id` (FK) bilan chalkashmasligi uchun.
 10. Keraksiz murakkablik qo'shma (ortiqcha abstraksiya, repository qatlami Prisma ustidan va h.k.).
+11. **Tranzaksiya ichida so'rovlar ketma-ket**, `Promise.all` ishlatilmaydi — tranzaksiya bitta ulanishda ishlaydi (`pg` parallel so'rovda deprecation ogohlantirishi beradi). Prisma'ning o'zi bir nechta bog'liq jadvalni `include` qilganda parallel so'rov yuboradi — buni `src/prisma/serialize-queries.ts` hal qiladi, uni olib tashlama.
 
 ## Ish uslubi
 
